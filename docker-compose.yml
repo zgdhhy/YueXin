@@ -1,0 +1,28 @@
+services:
+  web:
+    build: .
+    image: paper-web
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATA_DIR: /app/data
+    volumes:
+      - ./data:/app/data
+    ports:
+      - "127.0.0.1:3000:3000"
+    command: ["npm", "run", "start", "-w", "@paper/web", "--", "-p", "3000"]
+
+  worker:
+    image: paper-web
+    depends_on: [web]
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATA_DIR: /app/data
+      # 渲染并发数，按服务器 CPU 核数调整
+      RENDER_CONCURRENCY: "2"
+    volumes:
+      - ./data:/app/data
+    # 视频渲染需要较大的共享内存
+    shm_size: "1gb"
+    command: ["npm", "run", "start", "-w", "@paper/worker"]

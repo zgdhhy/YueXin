@@ -1,0 +1,32 @@
+{
+  "name": "@paper/video",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./storyboard": "./src/storyboard.ts",
+    "./render": "./render/index.ts",
+    "./music": "./render/music.ts"
+  },
+  "scripts": {
+    "studio": "remotion studio src/index.ts",
+    "typecheck": "tsc -p .",
+    "test": "node --import tsx --test \"src/**/*.test.ts\" \"render/**/*.test.ts\""
+  },
+  "dependencies": {
+    "@remotion/bundler": "4.0.537",
+    "@remotion/cli": "4.0.537",
+    "@remotion/renderer": "4.0.537",
+    "katex": "^0.19.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "remotion": "4.0.537",
+    "zod": "4.5.4"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.3.0",
+    "tsx": "^4.23.15",
+    "typescript": "~5.9.3"
+  }
+}

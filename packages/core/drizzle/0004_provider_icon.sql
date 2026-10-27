@@ -1,0 +1,1 @@
+ALTER TABLE `llm_providers` ADD `icon` text;

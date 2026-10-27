@@ -1,0 +1,1 @@
+ALTER TABLE `notify_channels` ADD `events` text DEFAULT '["digest","report","failure"]' NOT NULL;

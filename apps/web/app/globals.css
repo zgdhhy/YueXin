@@ -1,0 +1,117 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+@import "katex/dist/katex.min.css";
+
+@theme {
+  --font-sans: "Inter", "PingFang SC", "HarmonyOS Sans SC", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
+  /* 暖白纸张底色 */
+  --color-paper: #f5f7f9;
+  --color-ink: #243447;
+}
+
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 5rem;
+}
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------- 解读正文 ---------- */
+.article {
+  --tw-prose-body: #374151;
+  --tw-prose-headings: var(--color-ink);
+  --tw-prose-bold: var(--color-ink);
+  --tw-prose-links: var(--color-indigo-600);
+  --tw-prose-quotes: #4b5563;
+  --tw-prose-quote-borders: var(--color-indigo-200);
+  --tw-prose-th-borders: var(--color-stone-300);
+  --tw-prose-td-borders: var(--color-stone-200);
+  font-size: 1.0625rem;
+  line-height: 1.95;
+}
+.article :where(h2) {
+  margin-top: 2.6em;
+  padding-top: 1.4em;
+  border-top: 1px solid var(--color-stone-200);
+  font-size: 1.45em;
+  letter-spacing: -0.01em;
+}
+.article :where(h2:first-child) {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+.article :where(h3) {
+  font-size: 1.15em;
+}
+.article :where(p, li) {
+  text-align: justify;
+}
+.article :where(strong) {
+  background: none;
+}
+.article :where(code):not(pre code) {
+  background: var(--color-stone-100);
+  border-radius: 0.3rem;
+  padding: 0.1em 0.35em;
+  font-weight: 500;
+}
+.article :where(code):not(pre code)::before,
+.article :where(code):not(pre code)::after {
+  content: none;
+}
+.article :where(blockquote) {
+  font-style: normal;
+  background: var(--color-indigo-50);
+  border-radius: 0 0.5rem 0.5rem 0;
+  padding: 0.6em 1.1em;
+}
+.article :where(blockquote p::before, blockquote p::after) {
+  content: none;
+}
+.article :where(table) {
+  font-size: 0.875em;
+  line-height: 1.6;
+}
+.article :where(thead th) {
+  background: var(--color-stone-100);
+  padding: 0.6em 0.8em;
+}
+.article :where(tbody td) {
+  padding: 0.6em 0.8em;
+}
+.katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.4em 0;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* 手机端正文略小、两端对齐会产生大空隙，改为左对齐 */
+@media (max-width: 639px) {
+  .article {
+    font-size: 1rem;
+    line-height: 1.9;
+  }
+  .article :where(p, li) {
+    text-align: left;
+  }
+  .article :where(h2) {
+    font-size: 1.3em;
+  }
+}
+
+html:has(dialog[open]) { overflow: hidden; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }

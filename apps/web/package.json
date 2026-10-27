@@ -1,0 +1,42 @@
+{
+  "name": "@paper/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc -p ."
+  },
+  "dependencies": {
+    "@paper/core": "*",
+    "@paper/video": "*",
+    "better-sqlite3": "^13.0.3",
+    "clsx": "^2.1.1",
+    "croner": "^10.0.1",
+    "drizzle-orm": "^0.45.4",
+    "iron-session": "^9.0.1",
+    "katex": "^0.19.0",
+    "lucide-react": "^1.61.0",
+    "next": "^16.4.2",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-markdown": "^10.1.0",
+    "rehype-katex": "^7.0.1",
+    "remark-gfm": "^4.0.1",
+    "remark-math": "^6.0.0",
+    "tailwind-merge": "^3.7.0",
+    "zod": "4.5.4"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
+    "@tailwindcss/typography": "^0.5.20",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "playwright-core": "^1.64.1",
+    "tailwindcss": "^4.3.3",
+    "typescript": "~5.9.3"
+  }
+}
