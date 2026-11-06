@@ -16,13 +16,12 @@ const AUTH_BASE = "https://auth.openai.com";
 const AUTHORIZE_URL = `${AUTH_BASE}/oauth/authorize`;
 const TOKEN_URL = `${AUTH_BASE}/oauth/token`;
 /** Codex CLI 注册的回调地址；服务器上访问不到，登录后从地址栏复制完整 URL 粘贴回来即可 */
-export const CODEX_REDIRECT_URI = "http://localhost:1455/auth/callback";
+const CODEX_REDIRECT_URI = "http://localhost:1455/auth/callback";
 const DEVICE_USER_CODE_URL = `${AUTH_BASE}/api/accounts/deviceauth/usercode`;
 const DEVICE_TOKEN_URL = `${AUTH_BASE}/api/accounts/deviceauth/token`;
-export const CODEX_DEVICE_URL = `${AUTH_BASE}/codex/device`;
 const DEVICE_REDIRECT_URI = `${AUTH_BASE}/deviceauth/callback`;
 /** 设备码 15 分钟内有效 */
-export const DEVICE_CODE_TTL_MS = 15 * 60_000;
+const DEVICE_CODE_TTL_MS = 15 * 60_000;
 const SCOPE = "openid profile email offline_access";
 const JWT_AUTH_CLAIM = "https://api.openai.com/auth";
 const JWT_PROFILE_CLAIM = "https://api.openai.com/profile";

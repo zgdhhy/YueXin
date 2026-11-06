@@ -4,14 +4,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Plus } from "lucide-react";
 import type { Stage } from "@paper/core";
 import type { WorkspaceData } from "@/lib/model-workspace";
-import { Notice } from "@/components/feedback";
+import { Notice } from "@/components/admin/feedback";
 import { PolicyEditor } from "./policy-editor";
 import { ModelEditor, ModelsPicker, ProviderEditor } from "./workspace-panels";
 import { ModelVerificationResult } from "./model-verification-result";
 import { AccountPanel } from "./workspace-account";
 import { ProvidersSection, roles, usable } from "./providers-section";
 import { WorkflowSection } from "./workflow-section";
-import { Action, ApiError, Dialog, DraftStore, request, type Act } from "./workspace-ui";
+import { Action, ApiError, Dialog, request, type Act } from "./workspace-ui";
 import "./workspace.css";
 
 type PanelTarget={kind:"provider"|"models"|"model"|"verification"|"account"|"defaults"|"stage"|"delete-provider"|"delete-model"|"toggle-provider"|"toggle-model";providerId?:number;modelId?:number;stage?:Stage;
@@ -23,7 +23,6 @@ const fmt=(n:number)=>n>=1e6?`${(n/1e6).toFixed(1)}M`:n>=1000?`${(n/1000).toFixe
 export function ModelWorkspace({initial}:{initial:WorkspaceData}){
   const [data,setData]=useState(initial);
   const [panel,setPanel]=useState<Panel|null>(null); const sequence=useRef(0);
-  const store=useRef(new DraftStore()).current;
   const [notice,setNotice]=useState<{text:string;error:boolean;id:number}|null>(null);
   const [jobs,setJobs]=useState(new Set<string>());
   // 保存服务商连接后，等最新数据到达再重测其在用模型
@@ -40,8 +39,7 @@ export function ModelWorkspace({initial}:{initial:WorkspaceData}){
     finally{pending.current.delete(key);setJobs(new Set(pending.current));}
   },[apply,notify]);
   const open=(next:PanelTarget)=>setPanel({...next,token:++sequence.current});
-  // 添加服务商不保留草稿：关闭向导即丢弃，下次从目录重新开始
-  const close=()=>{if(panel?.kind==="provider"&&!panel.providerId)store.delete("new-provider");setPanel(null);};
+  const close=()=>setPanel(null);
   const test=(id:number)=>act({action:"test",id},"模型验证完成");
   const modelAdded=(id:number,showResult=true)=>{if(showResult)open({kind:"verification",modelId:id});void test(id);};
   useEffect(()=>{
@@ -74,16 +72,16 @@ export function ModelWorkspace({initial}:{initial:WorkspaceData}){
     <WorkflowSection data={data} onDefaults={()=>open({kind:"defaults"})} onStage={stage=>open({kind:"stage",stage})}/>
     <details className="mw-diagnostics"><summary>用量与诊断</summary><div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">{[["近 30 天调用",fmt(data.usage.calls)],["输入 tokens",fmt(data.usage.input)],["输出 tokens",fmt(data.usage.output)],["预估费用",`$${data.usage.cost.toFixed(2)}`]].map(([label,value])=><div key={label} className="mw-card p-4"><p className="text-[13px] text-slate-500">{label}</p><strong className="mt-2 block text-xl text-slate-800">{value}</strong></div>)}</div></details>
 
-    {panel?.kind==="provider"&&<ProviderEditor key={panel.token} provider={p} data={data} store={store} act={act} onClose={close} onSaved={id=>{if(p)setRetest(id);}}
+    {panel?.kind==="provider"&&<ProviderEditor key={panel.token} provider={p} data={data} act={act} onClose={close} onSaved={id=>{if(p)setRetest(id);}}
       onToggle={p?()=>toggle("provider",p.id,p.enabled,{kind:"provider",providerId:p.id}):undefined} onDelete={p?()=>open({kind:"delete-provider",providerId:p.id,back:{kind:"provider",providerId:p.id}}):undefined} onAccount={p?()=>open({kind:"account",providerId:p.id}):undefined}/>}
-    {panel?.kind==="models"&&p&&<ModelsPicker key={panel.token} provider={p} data={data} store={store} act={act} onClose={close} onAdded={modelAdded}/>}
+    {panel?.kind==="models"&&p&&<ModelsPicker key={panel.token} provider={p} data={data} act={act} onClose={close} onAdded={modelAdded}/>}
     {panel?.kind==="verification"&&m&&mp&&<ModelVerificationResult key={panel.token} model={m} provider={mp} policy={data.policy} act={act} testing={jobs.has(`test:${m.id}`)} onTest={()=>void test(m.id)} onClose={close}/>}
-    {panel?.kind==="account"&&p&&<AccountPanel key={panel.token} provider={p} data={data} store={store} act={act} onClose={close}/>}
-    {panel?.kind==="model"&&m&&mp&&<ModelEditor key={panel.token} model={m} provider={mp} data={data} store={store} act={act} onClose={close}
+    {panel?.kind==="account"&&p&&<AccountPanel key={panel.token} provider={p} act={act} onClose={close}/>}
+    {panel?.kind==="model"&&m&&mp&&<ModelEditor key={panel.token} model={m} provider={mp} data={data} act={act} onClose={close}
       testing={jobs.has(`test:${m.id}`)} onTest={()=>void test(m.id)} onToggle={()=>toggle("model",m.id,m.enabled,{kind:"model",modelId:m.id})}
       onDelete={()=>open({kind:"delete-model",modelId:m.id,back:{kind:"model",modelId:m.id}})}
       onDefault={m.enabled&&usable(mp)&&data.policy.defaultModelId!==m.id?()=>open({kind:"defaults",modelId:m.id}):undefined}/>}
-    {(panel?.kind==="defaults"||panel?.kind==="stage")&&<PolicyEditor key={panel.token} data={data} stage={panel.stage} initialModelId={panel.modelId} store={store} act={act} onClose={close}/>}
+    {(panel?.kind==="defaults"||panel?.kind==="stage")&&<PolicyEditor key={panel.token} data={data} stage={panel.stage} initialModelId={panel.modelId} act={act} onClose={close}/>}
     {panel&&(panel.kind.startsWith("delete")||panel.kind.startsWith("toggle"))&&<Dialog size="sm" title={`${isToggle?"停用":"删除"}${panel.kind.endsWith("provider")?"服务商":"模型"}`} subtitle={panel.kind==="delete-provider"?undefined:targetName} onClose={dismiss} footer={<><Action onClick={dismiss}>取消</Action><Action tone="danger" busy={!!operation&&jobs.has(operation)} onClick={async()=>{
       const token=panel.token;const r=await act({action:panel.kind,id:panel.kind.endsWith("provider")?panel.providerId:panel.modelId,...(isToggle?{enabled:!enabled}:{})},isToggle?"已停用":"已删除");
       if(r)setPanel(current=>current?.token===token?null:current);

@@ -1,27 +1,27 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import { Check, ChevronRight, Search } from "lucide-react";
 import type { WorkspaceData, WorkspaceModel } from "@/lib/model-workspace";
 import type { Stage } from "@paper/core";
 import { supportsEffort as modelSupportsEffort } from "@paper/core/connection";
-import { Dropdown } from "@/components/dropdown";
-import { LlmIconImg } from "@/components/llm-icon-img";
-import { Action, Dialog, DraftHint, FormField, SearchInput, TextInput, useDraft, type Act, type DraftStore } from "./workspace-ui";
+import { Dropdown } from "@/components/admin/dropdown";
+import { LlmIconImg } from "@/components/admin/llm-icon-img";
+import { Action, Dialog, FormField, SearchInput, TextInput, type Act } from "./workspace-ui";
 
-const names: Record<Stage, string> = { rerank: "选题精选", digest: "论文解读", storyboard: "视频分镜", report: "趋势月报" };
-export function ModelLabel({ id, data }: { id: number | null; data: WorkspaceData }) {
+const names: Record<Stage, string> = { rerank: "选题精选", digest: "论文解读", storyboard: "讲解脚本", code: "动画代码", report: "趋势月报", chat: "对话" };
+function ModelLabel({ id, data }: { id: number | null; data: WorkspaceData }) {
   const m = data.models.find((x) => x.id === id); const p = data.providers.find((x) => x.id === m?.providerId);
   return <span className="mw-model-label min-w-0"><span className="block break-words font-medium text-slate-800">{m ? m.displayName || m.modelId : id ? "原模型已被删除" : "尚未选择"}</span>{m && <span className="mt-1 block break-all text-[13px] text-slate-500">{p?.name ?? "服务商已被删除"}{m.displayName ? ` · ${m.modelId}` : ""}</span>}</span>;
 }
 export function verificationLabel(m: WorkspaceModel) {
   return !m.enabled ? "已停用" : ({ untested: "尚未验证", stale: "验证已过期", testing: "验证中", passed: "验证通过", failed: "验证失败" }[m.verification.status]);
 }
-export function PolicyEditor({ data, stage, initialModelId, store, act, onClose }: {
-  data: WorkspaceData; stage?: Stage; initialModelId?: number; store: DraftStore; act: Act; onClose: () => void;
+export function PolicyEditor({ data, stage, initialModelId, act, onClose }: {
+  data: WorkspaceData; stage?: Stage; initialModelId?: number; act: Act; onClose: () => void;
 }) {
-  const key = stage ? `stage:${stage}` : `defaults:${initialModelId ?? "edit"}`;
   const policy = stage ? data.policy.stages[stage] : null;
-  const { draft: d, setDraft, discard, resumed, alive } = useDraft(store, key, () => ({
+  const initial = () => ({
     primaryId: initialModelId ?? (policy ? policy.modelId : data.policy.defaultModelId),
     primaryMode: policy && !policy.modelId ? "inherit" : "model",
     fallbackId: policy ? policy.fallbackModelId : data.policy.fallbackModelId,
@@ -29,8 +29,12 @@ export function PolicyEditor({ data, stage, initialModelId, store, act, onClose 
     outputTokens: policy?.outputTokens?.toString() ?? "", effort: policy?.effort ?? "",
     revision: data.policy.revision, search: "", field: null as "primary" | "fallback" | null,
     saving: false, error: "",
-  }));
-  const patch = (next: Partial<typeof d>) => setDraft(current => ({ ...current, ...next }));
+  });
+  const [d, setForm] = useState(initial);
+  const alive = useRef(true);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+  const reset = () => setForm(initial());
+  const patch = (next: Partial<typeof d>) => setForm(current => ({ ...current, ...next }));
   const primaryId = stage && d.primaryMode === "inherit" ? data.policy.defaultModelId : d.primaryId;
   const primary = data.models.find((m) => m.id === primaryId);
   const provider = data.providers.find((p) => p.id === primary?.providerId);
@@ -51,13 +55,13 @@ export function PolicyEditor({ data, stage, initialModelId, store, act, onClose 
       outputTokens: provider?.protocol !== "codex" && d.outputTokens ? Number(d.outputTokens) : null,
       effort: supportsEffort && d.effort ? d.effort : null,
     } } : { action: "defaults", defaultModelId: primaryId, fallbackModelId: fallback, revision: d.revision }, "配置已保存，将用于下一次运行");
-    if (r) { discard(); if (alive.current) onClose(); }
-    else setDraft(current => ({ ...current, saving: false, error: "保存未完成，请查看提示；如果配置已更新，可放弃草稿后重试。" }));
+    if (!alive.current) return;
+    if (r) onClose();
+    else patch({ saving: false, error: "保存未完成，请查看提示后重试。" });
   };
   return <Dialog title={d.field ? `选择${d.field === "primary" ? "主模型" : "备用模型"}` : stage ? `编辑${names[stage]}` : "默认模型设置"}
     tall={!!d.field} onBack={d.field ? () => patch({ field: null, search: "" }) : undefined} onClose={onClose}
     footer={d.field ? undefined : <><Action onClick={onClose}>取消</Action><Action tone="primary" busy={d.saving} onClick={save}>保存修改</Action></>}>
-    <DraftHint resumed={resumed && store.has(key)} onDiscard={discard} />
     {d.field ? <div className="space-y-5">
       <SearchInput autoFocus value={d.search} onChange={(search) => patch({ search })} placeholder="搜索模型名称、ID 或服务商" />
       <div className="space-y-5">{groups.map(({ p, models }) => <section key={p.id}><h3 className="mb-2 flex items-center gap-2 text-[13px] font-medium text-slate-500"><LlmIconImg icon={p.icon} name={p.name} size={18} />{p.name}</h3><div className="space-y-2">{models.map((m) => {
@@ -69,7 +73,7 @@ export function PolicyEditor({ data, stage, initialModelId, store, act, onClose 
       {!groups.length && <div className="mw-empty"><Search size={24} /><p>{query ? "没有匹配的模型" : "没有已启用且可用的模型"}</p>{query && <Action onClick={() => patch({ search: "" })}>清空搜索</Action>}</div>}
     </div> : <div className="space-y-6">
       {d.error && <p role="alert" className="mw-error">{d.error}</p>}
-      {d.revision !== data.policy.revision && <div className="mw-warning">配置已在其他位置更新。<button type="button" onClick={discard} className="ml-2 underline">放弃草稿，读取最新配置</button></div>}
+      {d.revision !== data.policy.revision && <div className="mw-warning">配置已在其他位置更新。<button type="button" onClick={reset} className="ml-2 underline">读取最新配置</button></div>}
       <section className="space-y-3"><h3 className="font-medium text-slate-800">{stage ? "主模型" : "默认模型"}</h3>
         {stage && <div className="mw-segments">{[["inherit", "沿用默认"], ["model", "单独指定"]].map(([mode, label]) => <button type="button" key={mode} aria-pressed={d.primaryMode === mode} onClick={() => patch({ primaryMode: mode, error: "" })}>{label}</button>)}</div>}
         <button type="button" className="mw-choice" disabled={!!stage && d.primaryMode === "inherit"} onClick={() => patch({ field: "primary", search: "" })}><ModelLabel id={primaryId} data={data} /><ChevronRight size={18} className="ml-auto shrink-0 text-slate-400" /></button>

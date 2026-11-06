@@ -3,7 +3,6 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import http from "node:http";
-import { randomUUID } from "node:crypto";
 import { chromium } from "playwright-core";
 import { sealData } from "iron-session";
 

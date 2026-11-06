@@ -1,7 +1,9 @@
 import { eq } from "drizzle-orm";
 import { db, schema } from "../db";
 import { llmForStage } from "../llm";
-import { DIGEST_SYSTEM, digestPrompt } from "../prompts/digest";
+import { digestPrompt } from "../prompts/digest";
+import { saveTags } from "../library";
+import { requirementsFor } from "../requirements";
 import { fetchPaperContent } from "./fetchPaper";
 import { recentHistory, type Log } from "./select";
 
@@ -39,21 +41,8 @@ export function parseDigest(text: string): ParsedDigest {
   };
 }
 
-function saveTags(digestId: number, names: string[]) {
-  db.delete(schema.digestTags).where(eq(schema.digestTags.digestId, digestId)).run();
-  for (const name of names) {
-    db.insert(schema.tags).values({ name }).onConflictDoNothing().run();
-    const tag = db.select().from(schema.tags).where(eq(schema.tags.name, name)).get()!;
-    db.insert(schema.digestTags).values({ digestId, tagId: tag.id }).onConflictDoNothing().run();
-  }
-}
-
-/** 为一篇推荐生成解读并写库，返回 digest id */
-export async function writeDigest(
-  runId: number,
-  pick: { paperId: string; reason: string; notable: boolean },
-  log: Log,
-): Promise<number> {
+/** 按当前（或运行锁定的）写作要求生成解读，不写库；试写也用它 */
+export async function generateDigest(pick: { paperId: string; reason: string }, log: Log): Promise<{ parsed: ParsedDigest; versionId: number }> {
   const content = await fetchPaperContent(pick.paperId, log);
   let paperText = content.text;
   if (paperText.length > MAX_PAPER_CHARS) {
@@ -66,7 +55,8 @@ export async function writeDigest(
     .join("\n");
 
   const llm = llmForStage("digest");
-  log(`撰写解读中（${llm.label}）…`);
+  const requirements = requirementsFor("digest");
+  log(`撰写解读中（${llm.label}，写作要求 v${requirements.number}）…`);
   const prompt = digestPrompt({
     paper: paperText,
     figures: content.figures.map((f) => `${f.label} | ${f.caption}`).join("\n"),
@@ -78,14 +68,23 @@ export async function writeDigest(
   let lastErr: unknown;
   for (let i = 0; i < 2 && !parsed; i++) {
     try {
-      parsed = parseDigest(await llm.generate({ system: DIGEST_SYSTEM, prompt }));
+      parsed = parseDigest(await llm.generate({ system: requirements.content, prompt }));
     } catch (e) {
       lastErr = e;
       log(`解读输出格式不符，重试：${String(e)}`);
     }
   }
   if (!parsed) throw lastErr;
+  return { parsed, versionId: requirements.id };
+}
 
+/** 为一篇推荐生成解读并写库（新增一版修订并让它生效），返回 digest id */
+export async function writeDigest(
+  runId: number,
+  pick: { paperId: string; reason: string; notable: boolean },
+  log: Log,
+): Promise<number> {
+  const { parsed, versionId } = await generateDigest(pick, log);
   const values = {
     paperId: pick.paperId,
     runId,
@@ -95,13 +94,22 @@ export async function writeDigest(
     notable: pick.notable,
     pickReason: pick.reason,
   };
-  const row = db
-    .insert(schema.digests)
-    .values(values)
-    .onConflictDoUpdate({ target: schema.digests.paperId, set: values })
-    .returning({ id: schema.digests.id })
-    .get();
-  saveTags(row.id, parsed.tags);
+  const digestId = db.transaction((tx) => {
+    const row = tx
+      .insert(schema.digests)
+      .values(values)
+      .onConflictDoUpdate({ target: schema.digests.paperId, set: values })
+      .returning({ id: schema.digests.id })
+      .get();
+    const rev = tx
+      .insert(schema.digestRevisions)
+      .values({ digestId: row.id, runId, titleZh: parsed.titleZh, oneLiner: parsed.oneLiner, contentMd: parsed.contentMd, tags: parsed.tags, requirementsVersionId: versionId })
+      .returning({ id: schema.digestRevisions.id })
+      .get();
+    tx.update(schema.digests).set({ revisionId: rev.id }).where(eq(schema.digests.id, row.id)).run();
+    return row.id;
+  });
+  saveTags(digestId, parsed.tags);
   log(`解读完成：《${parsed.titleZh}》，${parsed.contentMd.length} 字`);
-  return row.id;
+  return digestId;
 }

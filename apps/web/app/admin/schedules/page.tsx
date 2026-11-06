@@ -1,8 +1,8 @@
 import { Cron } from "croner";
 import { cronToPlan, DEFAULT_PLANS, getSchedulePlanRow, MAX_PICKS, MAX_REPORT_DAY, WEEKDAYS, type DigestPlan, type ReportPlan } from "@paper/core";
 import { saveSchedule } from "../actions";
-import { SubmitButton } from "@/components/admin-client";
-import { Card, Field, Input, PageHeader, Select, Switch } from "@/components/ui";
+import { SubmitButton } from "@/components/admin/admin-client";
+import { Card, Field, Input, PageHeader, Select, Switch } from "@/components/admin/ui";
 
 type Row = NonNullable<ReturnType<typeof getSchedulePlanRow>>;
 

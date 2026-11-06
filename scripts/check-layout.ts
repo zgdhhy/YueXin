@@ -9,7 +9,7 @@ import { sealData } from "iron-session";
 process.loadEnvFile(".env");
 const base = process.env.SHOT_BASE ?? "http://localhost:3000";
 const db = new Database("data/app.db", { readonly: true });
-const digest = db.prepare("SELECT id, paper_id FROM digests WHERE status='published' ORDER BY created_at DESC LIMIT 1").get() as { id: number; paper_id: string } | undefined;
+const digest = db.prepare("SELECT id, paper_id FROM digests ORDER BY created_at DESC LIMIT 1").get() as { id: number; paper_id: string } | undefined;
 const report = db.prepare("SELECT month FROM trend_reports ORDER BY month DESC LIMIT 1").get() as { month: string } | undefined;
 const run = db.prepare("SELECT id FROM runs ORDER BY id DESC LIMIT 1").get() as { id: number } | undefined;
 db.close();
@@ -19,7 +19,7 @@ await ctx.addCookies([{ name: "paper_session", value: await sealData({ loggedIn:
 const page = await ctx.newPage();
 const failures: string[] = [];
 page.on("pageerror", e => failures.push(e.message));
-const routes = ["/", "/library", "/tags", "/timeline", "/reports", "/admin", "/admin/digests", "/admin/models", "/admin/selection", "/admin/video", "/admin/schedules", "/admin/notify"];
+const routes = ["/", "/library", "/videos", "/tags", "/timeline", "/reports", "/admin", "/admin/digests", "/admin/models", "/admin/selection", "/admin/video", "/admin/schedules", "/admin/notify"];
 if (digest) routes.push(`/papers/${digest.paper_id}`, `/admin/digests/${digest.id}`);
 if (report) routes.push(`/reports/${report.month}`);
 if (run) routes.push(`/admin/runs/${run.id}`);

@@ -9,13 +9,13 @@ const legacyFamily: Record<string,string> = {moonshot:"kimi","kimi-coding":"kimi
 const aliases: Record<string,string> = {kimi:"月之暗面 月亮之暗面 moonshot",zhipu:"智谱 GLM bigmodel",qianwen:"通义 千问 百炼 阿里 aliyun qwen",volcengine:"火山 豆包 字节 bytedance",google:"谷歌 gemini",siliconflow:"硅基流动 siliconcloud",deepseek:"深度求索",minimax:"海螺 稀宇",stepfun:"阶跃星辰",openai:"ChatGPT GPT",chatgpt:"ChatGPT Codex"};
 const vendorIds=new Set(["anthropic","openai","deepseek","qwen","moonshot","zhipu","minimax","volcengine","gemini","gemini-native","kimi-coding","glm-coding","bailian-coding","minimax-coding","volcengine-coding"]);
 export const presetFamily=(p:Preset)=>legacyFamily[p.id] ?? p.family ?? p.id;
-export function presetGroup(p:Preset):CatalogGroup {
+function presetGroup(p:Preset):CatalogGroup {
   if(p.authType==="oauth")return "login";
   if(p.id==="ollama")return "local";
   if(vendorIds.has(p.id))return "vendor";
   return p.group ?? "thirdparty";
 }
-export function presetDomain(p:Preset) {try{return new URL(p.keyUrl || p.baseUrl || "").hostname.replace(/^www\./,"");}catch{return p.authType==="oauth"?"ChatGPT 账号授权":"自定义接口";}}
+function presetDomain(p:Preset) {try{return new URL(p.keyUrl || p.baseUrl || "").hostname.replace(/^www\./,"");}catch{return p.authType==="oauth"?"ChatGPT 账号授权":"自定义接口";}}
 export type CatalogRow={id:string;name:string;group:CatalogGroup;icon:Preset["icon"];versions:Preset[];domain:string;targetId:string};
 export function catalogRows(presets:Preset[],query=""):CatalogRow[] {
   const groups=new Map<string,Preset[]>();

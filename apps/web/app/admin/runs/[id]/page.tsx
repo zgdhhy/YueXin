@@ -2,9 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { asc, eq } from "drizzle-orm";
 import { ArrowLeft, CheckCircle2, CircleDashed, ExternalLink, Loader2, MinusCircle, XCircle } from "lucide-react";
-import { db, schema } from "@paper/core";
-import { AutoRefresh } from "@/components/admin-client";
-import { Card, StatusBadge, Tag, fmtDuration, fmtTime } from "@/components/ui";
+import { db, schema, runLabel, versionLabel } from "@paper/core";
+import { AutoRefresh } from "@/components/admin/admin-client";
+import { Card, StatusBadge, Tag, fmtDuration, fmtTime } from "@/components/admin/ui";
 
 const STEP_ICON = {
   running: <Loader2 className="h-5 w-5 animate-spin text-sky-500" />,
@@ -28,7 +28,9 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
   const calls = db.select().from(schema.llmCalls).where(eq(schema.llmCalls.runId, id)).all();
   const cost = calls.some((c) => c.costUsd != null) ? calls.reduce((a, c) => a + (c.costUsd ?? 0), 0) : null;
   const active = run.status === "queued" || run.status === "running";
-  const kind = run.kind === "digest" ? (run.params.videoDigestId ? "重做视频" : "论文解读") : "趋势月报";
+  const kind = runLabel(run);
+  const locked = Object.values(run.params.requirements ?? {}).map((v) => versionLabel(v)).filter(Boolean);
+  const trial = run.kind === "trial" ? db.select({ id: schema.trials.id }).from(schema.trials).where(eq(schema.trials.runId, id)).get() : undefined;
 
   return (
     <>
@@ -42,6 +44,7 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
           运行 #{run.id} · {kind}
         </h1>
         <StatusBadge status={run.status} />
+        {trial && <Link href={`/admin/prompts/trials/${trial.id}`} className="text-sm font-medium text-indigo-600">查看试写对比</Link>}
       </div>
       <dl className="mb-6 grid grid-cols-2 gap-4 rounded-2xl bg-white p-4 sm:p-5 text-sm shadow-sm ring-1 ring-slate-200/80 sm:grid-cols-4">
         {[
@@ -69,6 +72,7 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
           {calls.some((c) => c.isFallback) && (
             <span className="text-amber-600">使用备用模型 {calls.filter((c) => c.isFallback).length} 次</span>
           )}
+          {locked.length > 0 && <span>写作要求：{locked.join("、")}</span>}
         </p>
       )}
 

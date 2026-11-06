@@ -1,36 +1,55 @@
 import Link from "next/link";
-import { ArrowUpRight, BookOpen, PlayCircle } from "lucide-react";
-import { DigestRow, Meta, TagChip } from "@/components/DigestCard";
-import { latestReport, listDigests, reportLead, tagCounts, fileUrl } from "@/lib/data";
-import { PaperImage } from "@/components/paper-image";
+import { ArrowRight, ArrowUpRight } from "@/components/reading-icons";
+import { fileUrl, latestReport, listDigests, tagCounts, getDigestByPaper, readMinutes, fmtVideo } from "@/lib/data";
+import type { ResearchFigureItem } from "@/components/site/research-figure";
+import { HomePaperMedia } from "@/components/site/home-paper-media";
+import { SiteMotion } from "@/components/site/site-motion";
+import { DigestRow, TagChip } from "@/components/site/DigestCard";
+import { SITE_NAME } from "@/lib/brand";
+import "./home.css";
 
 export default function HomePage() {
-  const all = listDigests();
-  const [latest, ...rest] = all;
-  const tags = tagCounts().slice(0, 8);
+  const papers = listDigests();
+  const featured = papers[0];
+  const detail = featured ? getDigestByPaper(featured.paperId) : null;
   const report = latestReport();
-  if (!latest) return <section className="room-empty"><BookOpen size={32} /><h1>从一篇论文，开始理解前沿</h1><p>这里将呈现精选论文的中文解读、关键图表与讲解视频。</p><Link className="room-button" href="/admin">配置并生成第一篇解读</Link></section>;
-  return (
-    <div className="reading-home">
-      <section className="home-selection" aria-labelledby="featured-title">
-        <div className="selection-heading"><span>本期精选</span><Link href="/library">浏览论文库 <ArrowUpRight size={15} /></Link></div>
-        <div className="selection-copy">
-          <Meta d={latest} />
-          <h1 id="featured-title"><Link href={`/papers/${latest.paperId}`}>{latest.titleZh}</Link></h1>
-          <p className="paper-original">{latest.paperTitle}{latest.organization && <span>{latest.organization}</span>}</p>
-          <p className="selection-summary">{latest.oneLiner}</p>
-          {latest.pickReason && <div className="selection-reason"><span>为什么值得读</span><p>{latest.pickReason}</p></div>}
-          <div className="selection-actions"><Link href={`/papers/${latest.paperId}`} className="room-button">阅读解读</Link>{latest.videoSec != null && latest.videoSec > 0 && <Link href={`/papers/${latest.paperId}#video`} className="room-text-button"><PlayCircle size={18} />观看讲解</Link>}</div>
-          <div className="selection-tags">{latest.tags.slice(0, 4).map(t => <TagChip key={t} name={t} />)}</div>
-        </div>
-        {latest.cover && <Link className="selection-figure" href={`/papers/${latest.paperId}`} aria-label={`阅读：${latest.titleZh}`}><PaperImage src={fileUrl(latest.cover)} title={latest.paperTitle} /><span>论文原图 · 在解读中查看方法与实验</span></Link>}
-      </section>
-      {rest.length > 0 && <section className="home-past"><div className="section-heading"><div><h2>接着读</h2><p>沿着一篇篇论文，理解研究如何演进。</p></div><Link href="/library">全部解读 <ArrowUpRight size={15} /></Link></div><div className="paper-list">{rest.slice(0, 5).map(d => <DigestRow key={d.id} d={d} />)}</div></section>}
-      <div className="home-discovery">
-        <section><div className="section-heading"><h2>探索研究方向</h2><Link href="/tags">全部方向</Link></div>{tags.length ? <div className="home-topics">{tags.map(t => <Link href={`/library?tag=${encodeURIComponent(t.name)}`} key={t.name}><span>{t.name}</span><span>{t.count} 篇</span></Link>)}</div> : <p className="room-muted">解读发布后，会在这里汇集研究方向。</p>}</section>
-        <section className="home-report"><div className="section-heading"><h2>放到趋势中看</h2><Link href="/reports">趋势月报</Link></div>{report ? <><time>{report.month.replace("-", " 年 ")} 月</time><h3><Link href={`/reports/${report.month}`}>{report.title}</Link></h3><p>{reportLead(report.contentMd) || "汇集本月解读，回看研究主线与值得关注的变化。"}</p><Link href={`/reports/${report.month}`} className="room-text-button">阅读本期月报 <ArrowUpRight size={15} /></Link></> : <p className="room-muted">月报会将一个月的解读串成研究脉络。发布后可在这里阅读。</p>}</section>
+  const topics = tagCounts();
+  const figures: ResearchFigureItem[] = [];
+  if (detail) {
+    for (const match of detail.digest.contentMd.matchAll(/!\[([^\]]*)\]\(figure:\/\/([^)]+)\)/g)) {
+      const figure = detail.figures.find(item => item.label.toLowerCase() === match[2].toLowerCase());
+      if (!figure || figures.some(item => item.src === fileUrl(figure.path))) continue;
+      figures.push({src:fileUrl(figure.path), label:figure.label.replace(/^(?:figure|fig)\s*/i,"图 "), caption:match[1]});
+      if (figures.length === 3) break;
+    }
+    if (!figures.length && featured?.cover) figures.push({src:fileUrl(featured.cover),label:"论文原图",caption:featured.paperTitle});
+  }
+
+  // 最新一篇摊开成一张展页：左页是解读，右页是论文原图或视频，翻开动作只在首次进入时出现一次。
+  return <SiteMotion><div className="research-home">
+    <h1 className="sr-only">{SITE_NAME}</h1>
+    {featured ? <article className="home-spread" aria-labelledby="home-feature-title">
+      <div className="home-spread-page">
+        <p className="home-spread-meta"><time dateTime={featured.createdAt}>{featured.createdAt.slice(0, 10)}</time><span>约 {readMinutes(featured.chars)} 分钟</span><a href={`https://arxiv.org/abs/${featured.paperId}`} target="_blank" rel="noreferrer">arXiv {featured.paperId}<ArrowUpRight size={14} /></a></p>
+        <h2 id="home-feature-title"><Link href={`/papers/${featured.paperId}`}>{featured.titleZh}</Link></h2>
+        <p className="home-spread-lead">{featured.oneLiner}</p>
+        <div className="home-spread-tags">{featured.tags.slice(0, 3).map(name => <TagChip key={name} name={name} />)}</div>
+        <Link className="home-primary" href={`/papers/${featured.paperId}`}>阅读解读<span><ArrowRight size={18} /></span></Link>
       </div>
-      <p className="home-note">从 HF Daily Papers、arXiv 与高引论文中选题，提供中文精读与讲解视频。已收录 {all.length} 篇解读。</p>
+      {(figures.length > 0 || detail?.video) && <div className="home-spread-page home-spread-figure"><HomePaperMedia figures={figures} title={featured.titleZh} video={detail?.video ? {src:fileUrl(detail.video.path), poster:featured.cover ? fileUrl(featured.cover) : undefined, duration:fmtVideo(detail.video.durationSec)} : null} /></div>}
+    </article> : <section className="home-spread home-empty"><div className="home-spread-page"><h2>还没有解读</h2><Link className="home-primary" href="/admin">前往后台<span><ArrowRight size={18} /></span></Link></div></section>}
+
+    {papers.length > 1 && <section className="home-section" data-reveal aria-labelledby="home-more-title"><div className="home-section-heading"><h2 id="home-more-title">继续阅读</h2><Link href="/library">全部论文<ArrowRight size={16} /></Link></div>{papers.slice(1,4).map(paper => <DigestRow key={paper.id} d={paper} />)}</section>}
+
+    <div className="home-index" data-reveal>
+      <section className="home-section" aria-labelledby="home-report-title">
+        <div className="home-section-heading"><h2 id="home-report-title">趋势月报</h2><Link href="/reports">往期<ArrowRight size={16} /></Link></div>
+        {report ? <Link className="home-report" href={`/reports/${report.month}`}><strong>{Number(report.month.slice(5))}<small>月</small></strong><span><small>{report.month.slice(0, 4)}</small>{report.title}</span><ArrowUpRight size={20} /></Link> : <p className="home-none">还没有月报</p>}
+      </section>
+      <section className="home-section" aria-labelledby="home-topics-title">
+        <div className="home-section-heading"><h2 id="home-topics-title">研究方向</h2><Link href="/tags">全部<ArrowRight size={16} /></Link></div>
+        <ol className="home-topic-list">{topics.slice(0,6).map(topic => <li key={topic.name}><Link href={`/tags/${encodeURIComponent(topic.name)}`}><span>{topic.name}</span><small>{topic.count}</small></Link></li>)}</ol>
+      </section>
     </div>
-  );
+  </div></SiteMotion>;
 }

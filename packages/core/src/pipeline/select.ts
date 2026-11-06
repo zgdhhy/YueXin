@@ -2,8 +2,11 @@ import { desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema } from "../db";
 import { generateJson, llmForStage } from "../llm";
-import { RERANK_SYSTEM, rerankPrompt } from "../prompts/rerank";
+import { rerankPrompt } from "../prompts/rerank";
+import { requirementsFor } from "../requirements";
+import { notInterestedPaperIds } from "../library";
 import { getSetting } from "../settings";
+import { preferenceSamples, type PreferenceSample } from "../topics";
 import { fetchArxivByIds, fetchArxivRecent } from "../sources/arxiv";
 import { fetchHfDaily } from "../sources/hf";
 import { fetchNotable } from "../sources/semanticScholar";
@@ -41,7 +44,7 @@ function enabledTopics() {
 }
 
 /** 采集新论文与近期重要论文，写入 papers 表 */
-export async function collect(log: Log, needNotable: boolean) {
+async function collect(log: Log, needNotable: boolean) {
   const sel = getSetting("selection");
   const topics = enabledTopics();
   const fresh = new Map<string, PaperMeta>();
@@ -149,13 +152,15 @@ export async function selectPapers(runId: number, picks: number, log: Log, paper
   log(`本次推荐 ${picks} 篇，其中近期重要论文名额 ${notablePicks} 个`);
 
   const { fresh, notable } = await collect(log, notablePicks > 0);
-  const done = new Set(
-    db
+  // 已解读过的和标记为不感兴趣（含删除了解读）的论文都不再推荐
+  const done = new Set([
+    ...db
       .select({ id: schema.digests.paperId })
       .from(schema.digests)
       .all()
       .map((r) => r.id),
-  );
+    ...notInterestedPaperIds(),
+  ]);
   const freshList = shortlist(fresh, sel.shortlistSize, done);
   const notableList = notablePicks ? shortlist(notable, Math.ceil(sel.shortlistSize / 2), done) : [];
   if (!freshList.length && !notableList.length) throw new Error("没有符合条件的候选论文");
@@ -170,11 +175,14 @@ export async function selectPapers(runId: number, picks: number, log: Log, paper
     .run();
 
   const topics = enabledTopics()
-    .map((t) => `- ${t.name}（权重 ${t.weight}）：${t.keywords.join(", ")}`)
+    .map((t) => `- ${t.name}（权重 ${t.weight}）：${t.description ? `${t.description}；` : ""}关键词 ${t.keywords.join(", ")}`)
     .join("\n");
   const history = recentHistory()
     .map((h) => `- ${h.date.slice(0, 10)} ${h.title}：${h.oneLiner}`)
     .join("\n");
+  const feedback = preferenceSamples();
+  const samples = (list: PreferenceSample[]) => list.map((p) => `- ${p.title}`).join("\n");
+  if (feedback.liked.length || feedback.disliked.length) log(`参考读者反馈：感兴趣 ${feedback.liked.length} 篇，不想看 ${feedback.disliked.length} 篇`);
 
   const llm = llmForStage("rerank");
   log(`大模型精选中（${llm.label}）…`);
@@ -182,13 +190,15 @@ export async function selectPapers(runId: number, picks: number, log: Log, paper
   const result = await generateJson(
     llm,
     {
-      system: RERANK_SYSTEM,
+      system: requirementsFor("rerank").content,
       prompt: rerankPrompt({
         picks,
         notablePicks: notableList.length ? notablePicks : 0,
         alternates: sel.alternates,
         topics,
         history,
+        liked: samples(feedback.liked),
+        disliked: samples(feedback.disliked),
         fresh: describe(freshList),
         notable: describe(notableList),
       }),

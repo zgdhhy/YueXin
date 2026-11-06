@@ -1,0 +1,27 @@
+/* 登录页：一张小展页，左页是品牌（logo 的靛蓝浅底），右页是密码框。变量来自 app/tokens.css。 */
+.login-page { display: grid; place-items: center; min-height: 100dvh; padding: 40px 20px; background: var(--ds-wash); color: var(--ds-ink); font-family: var(--ds-font); }
+.login-spread { display: grid; grid-template-columns: 1fr 1.2fr; width: min(720px, 100%); border-radius: 16px; background: var(--ds-paper); box-shadow: 0 0 0 1px var(--ds-line), var(--ds-shadow-md); overflow: hidden; }
+.login-cover { display: flex; flex-direction: column; justify-content: flex-end; gap: 20px; min-height: 320px; padding: 40px; background: var(--ds-accent-soft); box-shadow: inset -16px 0 24px -24px rgb(28 35 51 / .25); transform-origin: right center; }
+.login-cover h1 { font-family: var(--ds-display); font-size: 32px; font-weight: 600; line-height: 1.3; }
+.login-form { display: flex; flex-direction: column; justify-content: center; gap: 16px; padding: 40px; }
+.login-field { position: relative; display: block; }
+.login-field svg { position: absolute; top: 50%; left: 14px; width: 16px; height: 16px; transform: translateY(-50%); color: var(--ds-muted); pointer-events: none; }
+.login-field input { width: 100%; min-height: 48px; padding: 12px 16px 12px 40px; border: 1px solid var(--ds-line-strong); border-radius: var(--ds-radius-control); background: var(--ds-paper); color: var(--ds-ink); font-size: 16px; outline: none; transition: border-color 200ms var(--ds-ease), box-shadow 200ms var(--ds-ease); }
+.login-field input::placeholder { color: var(--ds-muted); }
+.login-field input:focus { border-color: var(--ds-accent); box-shadow: 0 0 0 3px rgb(73 101 182 / .18); }
+.login-field input[aria-invalid=true] { border-color: var(--ds-danger); }
+.login-error { color: var(--ds-danger); font-size: 14px; }
+.login-submit { min-height: 48px; border-radius: var(--ds-radius-control); background: var(--ds-accent); color: var(--ds-on-accent); font-size: 16px; font-weight: 500; transition: background-color 200ms var(--ds-ease), transform 160ms var(--ds-ease); }
+.login-submit:hover { background: var(--ds-accent-hover); }
+.login-submit:focus-visible { outline: 2px solid var(--ds-accent); outline-offset: 3px; }
+@media (prefers-reduced-motion: no-preference) {
+  .login-spread { animation: ds-rise 480ms var(--ds-ease) both; }
+  .login-cover { animation: ds-turn 800ms 100ms var(--ds-ease) both; }
+  .login-submit:active { transform: scale(.98); }
+  .login-error { animation: ds-rise 240ms var(--ds-ease) both; }
+}
+@media (max-width: 599px) {
+  .login-spread { grid-template-columns: 1fr; }
+  .login-cover { min-height: 0; padding: 32px 24px; }
+  .login-form { padding: 24px; }
+}

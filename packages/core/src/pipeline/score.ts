@@ -24,6 +24,18 @@ function hasWord(text: string, word: string) {
   return new RegExp(`\\b${escapeRe(word)}\\b`, "i").test(text);
 }
 
+/** 一篇论文与一个方向的匹配分（未乘权重）：关键词命中、标题命中、分类命中 */
+export function topicMatchScore(
+  p: Pick<PaperMeta, "title" | "abstract" | "arxivCategories" | "keywords">,
+  t: Pick<TopicLike, "keywords" | "arxivCategories">,
+) {
+  const text = `${p.title} ${p.abstract} ${p.keywords.join(" ")}`;
+  const hits = t.keywords.filter((k) => hasWord(text, k)).length;
+  const titleHit = t.keywords.some((k) => hasWord(p.title, k));
+  const catHit = p.arxivCategories.some((c) => t.arxivCategories.includes(c));
+  return Math.min(hits, 3) * 0.6 + (titleHit ? 1 : 0) + (catHit ? 0.3 : 0);
+}
+
 /** 规则初筛分：热度 + 主题匹配 + 机构加分。只用于缩小候选范围，最终由大模型精选。 */
 export function ruleScore(
   p: Pick<PaperMeta, "title" | "abstract" | "upvotes" | "citations" | "organization" | "arxivCategories" | "keywords" | "githubUrl">,
@@ -32,14 +44,10 @@ export function ruleScore(
 ): ScoreBreakdown {
   const popularity = p.citations != null ? 3 * Math.log1p(p.citations / 5) : 3 * Math.log1p(p.upvotes);
 
-  const text = `${p.title} ${p.abstract} ${p.keywords.join(" ")}`;
   let topic = 0;
   const matchedTopics: string[] = [];
   for (const t of topics) {
-    const hits = t.keywords.filter((k) => hasWord(text, k)).length;
-    const titleHit = t.keywords.some((k) => hasWord(p.title, k));
-    const catHit = p.arxivCategories.some((c) => t.arxivCategories.includes(c));
-    const s = Math.min(hits, 3) * 0.6 + (titleHit ? 1 : 0) + (catHit ? 0.3 : 0);
+    const s = topicMatchScore(p, t);
     if (s > 0) {
       topic += s * t.weight;
       matchedTopics.push(t.name);

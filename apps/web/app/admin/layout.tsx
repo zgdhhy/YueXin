@@ -2,9 +2,9 @@ import "./admin.css";
 import { Suspense } from "react";
 import { getHeartbeat, seedDefaults } from "@paper/core";
 import { requireAuth } from "@/lib/auth";
-import { Sidebar, Toast } from "@/components/admin-client";
-import { fmtRelative } from "@/components/ui";
-import { AdminFrame } from "@/components/admin-frame";
+import { Sidebar, Toast } from "@/components/admin/admin-client";
+import { fmtRelative } from "@/components/admin/ui";
+import { AdminFrame } from "@/components/admin/admin-frame";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   await requireAuth();

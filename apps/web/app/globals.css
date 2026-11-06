@@ -1,11 +1,11 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 @import "katex/dist/katex.min.css";
+@import "./tokens.css";
 
 @theme {
   --font-sans: "Inter", "PingFang SC", "HarmonyOS Sans SC", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
   /* 暖白纸张底色 */
-  --color-paper: #f5f7f9;
   --color-ink: #243447;
 }
 
@@ -115,3 +115,8 @@ body {
 
 html:has(dialog[open]) { overflow: hidden; }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+/* 助手对话（阅读站与后台共用） */
+.chat-user { width: fit-content; max-width: 85%; margin-inline-start: auto; padding: 10px 14px; border-radius: 12px 12px 4px 12px; background: var(--ds-surface); font-size: 14px; line-height: 1.8; white-space: pre-wrap; overflow-wrap: anywhere; }
+.chat-assistant { font-size: 14px; line-height: 1.9; overflow-wrap: anywhere; }
+.chat-assistant .article, .reading-room .chat-assistant .article { font-family: "Microsoft YaHei", "PingFang SC", system-ui, sans-serif; font-size: 14px; line-height: 1.9; }
+.chat-assistant .article :where(p) { margin-block: .6em; }

@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { env } from "@paper/core";
 
-export const SESSION_COOKIE = "paper_session";
+const SESSION_COOKIE = "paper_session";
 
 interface SessionData {
   loggedIn?: boolean;

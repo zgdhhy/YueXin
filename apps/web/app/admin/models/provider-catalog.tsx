@@ -4,7 +4,7 @@ import { useLayoutEffect, useRef } from "react";
 import { SlidersHorizontal, Search } from "lucide-react";
 import type { Preset } from "@paper/core";
 import { catalogRows, CATALOG_GROUPS } from "@/lib/provider-catalog";
-import { LlmIconImg } from "@/components/llm-icon-img";
+import { LlmIconImg } from "@/components/admin/llm-icon-img";
 import { SearchInput } from "./workspace-ui";
 
 export function ProviderCatalog({presets,query,category,onQuery,onCategory,onChoose}:{presets:Preset[];query:string;category:string;onQuery:(value:string)=>void;onCategory:(value:string)=>void;onChoose:(id:string)=>void}) {

@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { encodeWav, synthesizeMusic } from "./music";
-import { timeline, cueFrames, storyboardSchema } from "../src/storyboard";
+import { timeline, cueFrames, TRANSITION } from "../src/script";
 import { sampleProps } from "../src/sample";
 
 test("合成音乐长度正确、无爆音、同 seed 可复现", () => {
@@ -23,13 +23,19 @@ test("字幕时长随字数增长并有上下限", () => {
   assert.ok(cueFrames({ zh: "字".repeat(500), en: "x" }, 5) <= 360);
 });
 
-test("时间线首尾相接且示例分镜合法", () => {
-  storyboardSchema.parse(sampleProps.storyboard);
-  const t = timeline(sampleProps.storyboard.scenes, 5);
-  for (let i = 1; i < t.scenes.length; i++) {
-    const prev = t.scenes[i - 1];
-    assert.equal(t.scenes[i].from, prev.from + prev.frames - 15);
+test("有旁白时字幕时长跟随语音", () => {
+  assert.equal(cueFrames({ zh: "字".repeat(40), en: "x" }, 5, 2), Math.round(2.35 * 30));
+  assert.equal(cueFrames({ zh: "好", en: "ok" }, 5, 0.2), 45);
+});
+
+test("时间线首尾相接，镜头内字幕起点递增", () => {
+  const t = timeline(sampleProps.shots, 5);
+  for (let i = 1; i < t.shots.length; i++) {
+    const prev = t.shots[i - 1];
+    assert.equal(t.shots[i].from, prev.from + prev.frames - TRANSITION);
   }
-  const last = t.scenes.at(-1)!;
+  const last = t.shots.at(-1)!;
   assert.equal(t.total, last.from + last.frames);
+  const two = t.shots[1];
+  assert.equal(two.cueStarts[1], two.cueStarts[0] + two.cueFrames[0]);
 });

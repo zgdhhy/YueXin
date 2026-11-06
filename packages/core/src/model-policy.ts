@@ -4,8 +4,9 @@ import { z } from "zod";
 import { db, schema } from "./db";
 import { EFFORTS, getSetting, type Stage } from "./settings";
 
-export const MODEL_STAGES = ["rerank", "digest", "storyboard", "report"] as const;
-export const STAGE_NAMES: Record<Stage, string> = { rerank: "选题精选", digest: "论文解读", storyboard: "视频分镜", report: "趋势月报" };
+/** 环节键 storyboard 沿用旧名，界面上叫「讲解脚本」 */
+export const MODEL_STAGES = ["rerank", "digest", "storyboard", "code", "report", "chat"] as const;
+export const STAGE_NAMES: Record<Stage, string> = { rerank: "选题精选", digest: "论文解读", storyboard: "讲解脚本", code: "动画代码", report: "趋势月报", chat: "对话" };
 export const stagePolicySchema = z.object({
   modelId: z.number().int().positive().nullable().default(null),
   fallbackMode: z.enum(["inherit", "none", "model"]).default("inherit"),
@@ -14,11 +15,12 @@ export const stagePolicySchema = z.object({
   effort: z.enum(EFFORTS).nullable().default(null),
 });
 const emptyStage = () => stagePolicySchema.parse({});
-export const modelPolicySchema = z.object({
+const modelPolicySchema = z.object({
   version: z.literal(2).default(2), confirmed: z.boolean().default(false), revision: z.number().int().default(0),
   defaultModelId: z.number().int().positive().nullable().default(null),
   fallbackModelId: z.number().int().positive().nullable().default(null),
-  stages: z.object({ rerank: stagePolicySchema, digest: stagePolicySchema, storyboard: stagePolicySchema, report: stagePolicySchema }),
+  // code、chat 为后加的环节，旧配置里没有时按「沿用默认」补上
+  stages: z.object({ rerank: stagePolicySchema, digest: stagePolicySchema, storyboard: stagePolicySchema, code: stagePolicySchema.default(() => emptyStage()), report: stagePolicySchema, chat: stagePolicySchema.default(() => emptyStage()) }),
 });
 export type ModelPolicy = z.infer<typeof modelPolicySchema>;
 export type StagePolicy = z.infer<typeof stagePolicySchema>;
@@ -30,7 +32,7 @@ export type RunModelSnapshot = { version: 2; revision: number; capturedAt: strin
 export function getModelPolicy(): ModelPolicy {
   const value = db.select().from(schema.settings).where(eq(schema.settings.key, "modelPolicy")).get()?.value;
   if (value) return modelPolicySchema.parse(value);
-  return modelPolicySchema.parse({ stages: { rerank: emptyStage(), digest: emptyStage(), storyboard: emptyStage(), report: emptyStage() } });
+  return modelPolicySchema.parse({ stages: { rerank: emptyStage(), digest: emptyStage(), storyboard: emptyStage(), code: emptyStage(), report: emptyStage(), chat: emptyStage() } });
 }
 export function saveModelPolicy(value: ModelPolicy) {
   const next = modelPolicySchema.parse({ ...value, revision: Math.max(Date.now(), getModelPolicy().revision + 1) });
@@ -87,8 +89,11 @@ export function createModelSnapshot(stages: readonly Stage[]): RunModelSnapshot 
 }
 export function requiredStages(run: { kind: string; params: schema.RunParams }): Stage[] {
   if (run.kind === "trend_report") return ["report"];
-  if (run.params.videoDigestId) return ["storyboard"];
-  return [...(run.params.paperIds?.length ? [] : ["rerank" as const]), "digest", ...(getSetting("video").enabled ? ["storyboard" as const] : [])];
+  if (run.kind === "trial") return run.params.trial ? [run.params.trial.stage] : [];
+  if (run.kind === "sample") return ["code"];
+  if (run.kind === "reference") return ["chat", "code"];
+  if (run.params.videoDigestId) return run.params.reuseScript ? ["code"] : ["storyboard", "code"];
+  return [...(run.params.paperIds?.length ? [] : ["rerank" as const]), "digest", ...(getSetting("video").enabled ? (["storyboard", "code"] as const) : [])];
 }
 export function modelUsage(ids: number[]) {
   const policy = getModelPolicy(); const usage: string[] = [];

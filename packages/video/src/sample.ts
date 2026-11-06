@@ -1,59 +1,35 @@
-import type { ExplainerProps } from "./storyboard";
+import type { ExplainerProps } from "./script";
+import { DEFAULT_TOKENS } from "./theme";
 
-/** Remotion Studio 预览用的示例数据 */
+/** Remotion Studio 预览用：一个手写的镜头代码（已是 CommonJS）+ 两个退化为简单画面的镜头 */
+const demo = `const { jsx, jsxs } = require("react/jsx-runtime");
+const { Title, FadeIn, Card, revealAt } = require("@kit");
+module.exports.default = function Shot(p) {
+  const items = ["每一步都要截图", "只能点鼠标", "规则写死在框架里"];
+  return jsxs("div", { children: [
+    jsx(Title, { children: "过去的瓶颈" }),
+    ...items.map((t, i) => jsx(FadeIn, { delay: revealAt(i, items.length, p.cueStarts), style: { marginBottom: 20 }, children: jsx(Card, { style: { fontSize: 40 }, children: t }) }, i)),
+  ] });
+};`;
+
 export const sampleProps: ExplainerProps = {
   readingSpeed: 5,
   musicUrl: null,
   musicVolume: 0.25,
   figures: {},
+  style: DEFAULT_TOKENS,
   meta: { arxivId: "2610.00000", paperTitle: "An Example Paper Title", date: "2026-10-21" },
-  storyboard: {
-    scenes: [
-      {
-        type: "title",
-        title: "示例：把推理交给模型",
-        subtitle: "一篇关于智能体设计范式转变的论文",
-        cues: [{ zh: "今天我们来读一篇关于智能体的新论文。", en: "Today we read a new paper about agents." }],
-      },
-      { type: "section", index: 1, title: "背景", cues: [{ zh: "先看问题从哪里来。", en: "First, where the problem comes from." }] },
-      {
-        type: "bullets",
-        heading: "过去的瓶颈",
-        items: ["每一步都要截图", "只能点鼠标", "规则写死在框架里"],
-        cues: [
-          { zh: "传统智能体每一步都要看一次屏幕。", en: "Traditional agents look at the screen every step." },
-          { zh: "而且只能通过鼠标键盘操作，规则也是写死的。", en: "They can only use mouse and keyboard, with hard-coded rules." },
-        ],
-      },
-      {
-        type: "flow",
-        heading: "新方法的流程",
-        steps: [{ label: "决定看什么" }, { label: "写一段程序", detail: "GUI 与代码混用" }, { label: "自我校验" }],
-        cues: [{ zh: "新方法让模型自己决定看什么、怎么做。", en: "The model decides what to look at and how to act." }],
-      },
-      {
-        type: "formula",
-        heading: "形式化",
-        latex: "(q_t, p_t, m_{t+1}) \\sim \\pi_\\theta(\\cdot \\mid m_t, o_t)",
-        explanation: "每一步联合决定：观察、程序、工作记忆",
-        cues: [{ zh: "用一个公式概括：三个决策联合输出。", en: "One formula: three decisions made jointly." }],
-      },
-      {
-        type: "bars",
-        heading: "OSWorld-v2 平均得分",
-        unit: "",
-        bars: [
-          { label: "基线", value: 41.2 },
-          { label: "OpenGCUA", value: 60.8, highlight: true },
-        ],
-        cues: [{ zh: "八个模型平均提升了 19.6 分。", en: "Average gain of 19.6 points across eight models." }],
-      },
-      {
-        type: "outro",
-        title: "一句话记住",
-        points: ["把决策权交给模型", "用程序代替逐步点击"],
-        cues: [{ zh: "以上就是今天的论文，我们下期见。", en: "That's all for today. See you next time." }],
-      },
-    ],
-  },
+  shots: [
+    { heading: "把推理交给模型", cues: [{ zh: "今天我们来读一篇关于智能体的新论文。", en: "Today we read a new paper about agents." }], js: null, narration: null },
+    {
+      heading: "过去的瓶颈",
+      cues: [
+        { zh: "传统智能体每一步都要看一次屏幕。", en: "Traditional agents look at the screen every step." },
+        { zh: "而且只能通过鼠标键盘操作，规则也是写死的。", en: "They can only use mouse and keyboard, with hard-coded rules." },
+      ],
+      js: demo,
+      narration: null,
+    },
+    { heading: "值得学习的地方", cues: [{ zh: "把决策权交给模型，框架只提供工具。", en: "Let the model decide; the harness only provides tools." }], js: null, narration: null },
+  ],
 };

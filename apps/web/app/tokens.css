@@ -1,0 +1,43 @@
+/* 全站设计变量，唯一来源。值取自阅读页（components/reader/reader-workspace.css 顶部），
+   lib/design-tokens.test.ts 会校验两边一致。
+   前台由 (site)/theme.css、后台由 admin/admin.css 映射成各自的变量名。 */
+@font-face { font-family: "Reading Sans"; src: url("/fonts/reading-sans.woff2") format("woff2"); font-style: normal; font-weight: 400 600; font-display: swap; }
+@font-face { font-family: "Reading Display"; src: url("/fonts/reading-display.woff2") format("woff2"); font-style: normal; font-weight: 600; font-display: swap; }
+
+:root {
+  --ds-paper: #ffffff; --ds-wash: #f7f9fc; --ds-surface: #f1f4fa; --ds-surface-hover: #e7ecf6;
+  --ds-line: #e3e7ef; --ds-line-strong: #c5cddb;
+  --ds-ink: #1c2333; --ds-body: #3b4354; --ds-muted: #5e6677;
+  --ds-accent: #4965b6; --ds-accent-hover: #3d56a0; --ds-accent-strong: #324683; --ds-accent-soft: #eef2fa; --ds-accent-line: #b9c6e8;
+  --ds-on-accent: #ffffff;
+  --ds-mark: #e6a071; --ds-mark-soft: #fcf1e8; --ds-mark-line: #f6cdb0; --ds-mark-text: #9a5426;
+  --ds-danger: #b83a35; --ds-danger-soft: #fbedec; --ds-success: #2b7347; --ds-success-soft: #e9f5ee;
+  --ds-shadow-sm: 0 2px 8px rgb(28 35 51 / .08); --ds-shadow-md: 0 8px 28px rgb(28 35 51 / .12); --ds-shadow-lg: 0 16px 48px rgb(28 35 51 / .16);
+
+  --ds-font: "Reading Sans", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --ds-display: "Reading Display", "Noto Serif SC", Georgia, serif;
+  --ds-radius-panel: 12px; --ds-radius-control: 8px;
+  --ds-ease: cubic-bezier(.22, 1, .36, 1);
+}
+
+/* 动效：页面内容切入时轻微上浮；展页翻开一次。只动 transform 和 opacity。 */
+@keyframes ds-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes ds-turn { from { opacity: 0; transform: perspective(1600px) rotateY(-16deg); } to { opacity: 1; transform: none; } }
+@keyframes ds-pop { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
+
+/* 图片放大（components/image-lightbox.tsx）：页面中央显示原图，点击空白、图片或按 Esc 关闭 */
+.image-lightbox { position: fixed; inset: 0; width: 100vw; max-width: none; height: 100dvh; max-height: none; margin: 0; padding: 48px; border: 0; background: transparent; display: none; place-items: center; align-content: center; gap: 16px; cursor: zoom-out; }
+.image-lightbox[open] { display: grid; }
+.image-lightbox::backdrop { background: rgb(28 35 51 / .72); backdrop-filter: blur(4px); }
+/* 放大框尺寸固定，原图在框内等比缩放，大图小图看起来一样大 */
+.image-lightbox img { width: min(1200px, 100%); height: calc(100dvh - 180px); border-radius: var(--ds-radius-panel); background: #fff; padding: 24px; box-shadow: var(--ds-shadow-lg); object-fit: contain; }
+.image-lightbox p { max-width: 72ch; color: #fff; font: 14px/1.7 var(--ds-font); text-align: center; cursor: auto; }
+.image-lightbox button { position: fixed; top: 20px; right: 20px; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; background: rgb(255 255 255 / .14); color: #fff; cursor: pointer; transition: background-color 200ms var(--ds-ease); }
+.image-lightbox button:hover { background: rgb(255 255 255 / .26); }
+.image-lightbox button:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+@media (prefers-reduced-motion: no-preference) {
+  .image-lightbox[open] img { animation: ds-pop 280ms var(--ds-ease) both; }
+  .image-lightbox[open]::backdrop { animation: ds-fade 200ms ease-out both; }
+}
+@keyframes ds-fade { from { opacity: 0; } to { opacity: 1; } }
+a[data-lightbox] { cursor: zoom-in; }

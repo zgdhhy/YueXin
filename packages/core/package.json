@@ -10,7 +10,6 @@
     "./db": "./src/db/index.ts",
     "./schema": "./src/db/schema.ts",
     "./run": "./src/pipeline/run.ts",
-    "./presets": "./src/llm/presets.ts",
     "./icons": "./src/llm/icons.ts",
     "./connection": "./src/llm/connection.ts"
   },

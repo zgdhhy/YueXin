@@ -2,7 +2,8 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { eq } from "drizzle-orm";
+import { SITE_NAME } from "@/lib/brand";
+import { eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
@@ -21,10 +22,37 @@ import {
   NOTIFY_EVENTS,
   type NotifyEvent,
   saveSchedulePlan,
+  deleteDigests,
+  REQUIREMENT_STAGES,
+  type RequirementStage,
+  saveRequirementVersion,
+  activateRequirementVersion,
+  getRequirementVersion,
+  enqueueTrial,
+  activateDigestRevision,
+  adoptDigestTrial,
+  saveStyle,
+  getStyle,
+  setStyleEnabled,
+  deleteStyle,
+  updateScript,
+  reviseShot,
+  type ShotEdit,
+  askTopicAssistant,
+  newTopicConversation,
+  saveTopicDraft,
+  isTopicDraft,
+  type TopicReply,
+  type Message,
+  askPromptAssistant,
+  newPromptConversation,
+  saveRequirementDraft,
   env,
 } from "@paper/core";
 import { encodeWav, synthesizeMusic } from "@paper/video/music";
 import { requireAuth } from "@/lib/auth";
+import { FONT_KEYS, FONT_STACKS } from "@/lib/fonts";
+import type { StyleTokens } from "@paper/video/theme";
 
 const str = (f: FormData, k: string) => String(f.get(k) ?? "").trim();
 const num = (f: FormData, k: string) => Number(f.get(k));
@@ -98,6 +126,7 @@ export async function saveTopic(f: FormData) {
   await requireAuth();
   const values = {
     name: str(f, "name") || "未命名",
+    description: str(f, "description").slice(0, 200),
     arxivCategories: list(f, "arxivCategories"),
     keywords: list(f, "keywords"),
     weight: num(f, "weight") || 1,
@@ -117,56 +146,80 @@ export async function deleteTopic(f: FormData) {
 
 export async function saveVideoSettings(f: FormData) {
   await requireAuth();
+  const styleId = optId(f, "styleId");
   const parsed = videoSchema.safeParse({
     ...getSetting("video"),
     enabled: bool(f, "enabled"),
     musicMode: str(f, "musicMode"),
     musicVolume: num(f, "musicVolume") / 100,
     readingSpeed: num(f, "readingSpeed"),
+    styleMode: str(f, "styleMode") === "fixed" && styleId ? "fixed" : "auto",
+    styleId,
+    narration: { enabled: bool(f, "narration"), providerId: optId(f, "narrationProvider"), model: str(f, "narrationModel"), voice: str(f, "narrationVoice"), speed: num(f, "narrationSpeed") || 1 },
   });
-  if (!parsed.success) back("/admin/video", "参数无效");
+  if (!parsed.success) back("/admin/video?tab=settings", "参数无效");
+  if (parsed.data.narration.enabled && (!parsed.data.narration.providerId || !parsed.data.narration.model)) back("/admin/video?tab=settings", "开启旁白需要选择服务商并填写模型");
   setSetting("video", parsed.data);
-  back("/admin/video", "已保存");
+  back("/admin/video?tab=settings", "已保存");
 }
 
 // ---------- 解读 ----------
 
-export async function setDigestStatus(f: FormData) {
-  await requireAuth();
-  const status = str(f, "status") === "hidden" ? ("hidden" as const) : ("published" as const);
-  db.update(schema.digests).set({ status }).where(eq(schema.digests.id, num(f, "id"))).run();
-  back("/admin/digests", status === "hidden" ? "已下线" : "已上线");
+const selectedIds = (f: FormData) => f.getAll("ids").map(Number).filter(Number.isSafeInteger);
+/** 操作后回到原列表（保留筛选与分页） */
+const listBack = (f: FormData) => (str(f, "back").startsWith("/admin/digests") ? str(f, "back") : "/admin/digests");
+
+function selectedDigests(f: FormData) {
+  const ids = selectedIds(f);
+  const rows = ids.length ? db.select({ id: schema.digests.id, paperId: schema.digests.paperId }).from(schema.digests).where(inArray(schema.digests.id, ids)).all() : [];
+  if (!rows.length) back(listBack(f), "请先选择解读");
+  return rows;
 }
 
-export async function regenerateDigest(f: FormData) {
+export async function regenerateDigests(f: FormData) {
   await requireAuth();
-  const id = enqueueRun("digest", "manual", { paperIds: [str(f, "paperId")] });
+  const issue = configurationIssue(); if (issue) back("/admin/models", issue);
+  const id = enqueueRun("digest", "manual", { paperIds: selectedDigests(f).map((d) => d.paperId) });
   redirect(`/admin/runs/${id}`);
+}
+
+export async function rerenderVideos(f: FormData) {
+  await requireAuth();
+  const issue = configurationIssue(); if (issue) back("/admin/models", issue);
+  const runs = selectedDigests(f).map((d) => enqueueRun("digest", "manual", { videoDigestId: d.id }));
+  if (runs.length === 1) redirect(`/admin/runs/${runs[0]}`);
+  back("/admin", `已加入 ${runs.length} 次运行`);
+}
+
+export async function removeDigests(f: FormData) {
+  await requireAuth();
+  const rows = selectedDigests(f);
+  let n: number;
+  try {
+    n = deleteDigests(rows.map((d) => d.id));
+  } catch (e) {
+    back(listBack(f), e instanceof Error ? e.message : String(e));
+  }
+  back(listBack(f), `已删除 ${n} 篇`);
 }
 
 // ---------- 视频与音乐 ----------
-
-export async function rerenderVideo(f: FormData) {
-  await requireAuth();
-  const id = enqueueRun("digest", "manual", { videoDigestId: num(f, "digestId") });
-  redirect(`/admin/runs/${id}`);
-}
 
 const AUDIO_EXT = [".mp3", ".wav", ".m4a", ".ogg"];
 
 export async function uploadMusic(f: FormData) {
   await requireAuth();
   const files = f.getAll("files").filter((x): x is File => x instanceof File && x.size > 0);
-  if (!files.length) back("/admin/video", "请选择音乐文件");
+  if (!files.length) back("/admin/video?tab=settings", "请选择音乐文件");
   fs.mkdirSync(dataPath("music"), { recursive: true });
   for (const file of files) {
     const ext = path.extname(file.name).toLowerCase();
-    if (!AUDIO_EXT.includes(ext)) back("/admin/video", `不支持的格式：${file.name}`);
+    if (!AUDIO_EXT.includes(ext)) back("/admin/video?tab=settings", `不支持的格式：${file.name}`);
     const rel = `music/${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`;
     fs.writeFileSync(dataPath(rel), Buffer.from(await file.arrayBuffer()));
     db.insert(schema.musicTracks).values({ name: path.basename(file.name, ext), path: rel }).run();
   }
-  back("/admin/video", `已上传 ${files.length} 首`);
+  back("/admin/video?tab=settings", `已上传 ${files.length} 首`);
 }
 
 export async function deleteMusic(f: FormData) {
@@ -176,7 +229,7 @@ export async function deleteMusic(f: FormData) {
     fs.rmSync(dataPath(t.path), { force: true });
     db.delete(schema.musicTracks).where(eq(schema.musicTracks.id, t.id)).run();
   }
-  back("/admin/video", "已删除");
+  back("/admin/video?tab=settings", "已删除");
 }
 
 /** 生成一段 30 秒的程序化音乐试听 */
@@ -185,7 +238,7 @@ export async function previewMusic() {
   const seed = Math.floor(Math.random() * 1e6);
   fs.mkdirSync(dataPath("music"), { recursive: true });
   fs.writeFileSync(dataPath("music", "preview.wav"), encodeWav(synthesizeMusic(30, seed)));
-  back("/admin/video", `已生成试听（seed ${seed}）`);
+  back("/admin/video?tab=settings", `已生成试听（seed ${seed}）`);
 }
 
 // ---------- 通知 ----------
@@ -236,7 +289,7 @@ export async function testChannel(f: FormData) {
   let msg: string;
   try {
     await sendToChannel(c, {
-      title: "AI 前沿论文精读 · 测试消息",
+      title: `${SITE_NAME} · 测试消息`,
       items: [{ title: "通知渠道配置成功", summary: `以后「${c.events.map((e) => EVENT_LABELS[e]).join("、")}」会推送到这里。`, url: env.siteUrl }],
     });
     msg = "已保存，测试消息已发送";
@@ -244,4 +297,203 @@ export async function testChannel(f: FormData) {
     msg = `已保存，但发送失败：${String(e).slice(0, 300)}`;
   }
   back(editHref(id), msg);
+}
+
+// ---------- 提示词（写作要求） ----------
+
+const promptsHref = (stage: string, v?: number) => `/admin/prompts?stage=${stage}${v ? `&v=${v}` : ""}`;
+
+export async function saveRequirement(f: FormData) {
+  await requireAuth();
+  const stage = str(f, "stage") as RequirementStage;
+  if (!(REQUIREMENT_STAGES as readonly string[]).includes(stage)) back("/admin/prompts", "环节无效");
+  let id: number;
+  try {
+    id = saveRequirementVersion(stage, String(f.get("content") ?? ""), str(f, "note")).id;
+  } catch (e) {
+    back(promptsHref(stage, optId(f, "from") ?? undefined), e instanceof Error ? e.message : String(e));
+  }
+  back(promptsHref(stage, id), "已保存为新版本");
+}
+
+export async function activateRequirement(f: FormData) {
+  await requireAuth();
+  const v = activateRequirementVersion(num(f, "id"));
+  back(str(f, "back").startsWith("/admin/") ? str(f, "back") : promptsHref(v.stage, v.id), `已启用 v${v.number}`);
+}
+
+export async function adoptTrial(f: FormData) {
+  await requireAuth();
+  const trialId = num(f, "id");
+  try {
+    adoptDigestTrial(trialId);
+  } catch (e) {
+    back(`/admin/prompts/trials/${trialId}`, e instanceof Error ? e.message : String(e));
+  }
+  back(`/admin/prompts/trials/${trialId}`, "已采用这次解读；写作要求及已有视频保持原状");
+}
+
+export async function startTrial(f: FormData) {
+  await requireAuth();
+  const versionId = num(f, "id");
+  const v = getRequirementVersion(versionId);
+  if (!v) back("/admin/prompts", "版本不存在");
+  const issue = configurationIssue(); if (issue) back("/admin/models", issue);
+  try {
+    enqueueTrial(versionId, str(f, "target"));
+  } catch (e) {
+    back(promptsHref(v.stage, versionId), e instanceof Error ? e.message : String(e));
+  }
+  back(promptsHref(v.stage, versionId), "已开始试写，完成后可对比");
+}
+
+export async function activateRevision(f: FormData) {
+  await requireAuth();
+  const digestId = num(f, "digestId");
+  activateDigestRevision(digestId, num(f, "revisionId"));
+  back(`/admin/digests/${digestId}`, "已切换生效的修订");
+}
+
+// ---------- 方向助手 ----------
+
+/** 和方向助手说一句话：返回新增的两条消息（回复里可能带草稿与试选结果） */
+export async function askTopicAction(text: string, conversationId?: number): Promise<{ conversationId?: number; messages?: TopicReply[]; error?: string }> {
+  await requireAuth();
+  try {
+    return await askTopicAssistant(text.slice(0, 4000), conversationId);
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+export async function newTopicChatAction() {
+  await requireAuth();
+  return newTopicConversation();
+}
+
+/** 保存助手消息里的草稿为方向（同名则更新） */
+export async function saveTopicDraftAction(messageId: number) {
+  await requireAuth();
+  const m = db.select().from(schema.messages).where(eq(schema.messages.id, messageId)).get();
+  if (!m || !isTopicDraft(m.data)) return { error: "草稿不存在" };
+  const r = saveTopicDraft(m.data);
+  revalidatePath("/admin/selection");
+  return { ok: r.updated ? `已更新「${m.data.name}」` : `已添加「${m.data.name}」` };
+}
+
+// ---------- 视频风格 ----------
+
+const styleHref = (id?: number) => `/admin/video${id ? `?style=${id}` : ""}`;
+const COLOR = /^#[0-9a-f]{6}$|^rgba?\([\d.,\s%]+\)$/i;
+
+export async function saveStyleAction(f: FormData) {
+  await requireAuth();
+  const id = optId(f, "id");
+  const colors = Object.fromEntries(["bg", "bg2", "surface", "border", "text", "muted", "primary", "accent"].map((k) => [k, str(f, `color_${k}`)]));
+  if (Object.values(colors).some((c) => !COLOR.test(c))) back(styleHref(id ?? undefined), "颜色格式无效");
+  const pick = <T extends string>(v: string, ok: readonly T[], d: T) => (ok.includes(v as T) ? (v as T) : d);
+  const tokens: StyleTokens = {
+    colors: colors as StyleTokens["colors"],
+    fonts: { heading: FONT_STACKS[pick(str(f, "fontHeading"), FONT_KEYS, "sans")], body: FONT_STACKS[pick(str(f, "fontBody"), FONT_KEYS, "sans")] },
+    background: pick(str(f, "background"), ["aurora", "grid", "plain", "paper"] as const, "plain"),
+    transition: pick(str(f, "transition"), ["fade", "slide", "cut"] as const, "fade"),
+    subtitle: pick(str(f, "subtitle"), ["dark", "light"] as const, "dark"),
+  };
+  const saved = saveStyle({ name: str(f, "name"), description: str(f, "description"), guide: String(f.get("guide") ?? ""), tokens }, id ?? undefined);
+  back(styleHref(saved), "已保存");
+}
+
+export async function copyStyleAction(f: FormData) {
+  await requireAuth();
+  const s = getStyle(num(f, "id"));
+  if (!s) back("/admin/video", "风格不存在");
+  const id = saveStyle({ name: `${s.name}（副本）`, description: s.description, guide: s.guide, tokens: s.tokens });
+  back(styleHref(id), "已复制");
+}
+
+export async function toggleStyleAction(f: FormData) {
+  await requireAuth();
+  setStyleEnabled(num(f, "id"), bool(f, "enabled"));
+  back("/admin/video", bool(f, "enabled") ? "已启用" : "已停用");
+}
+
+export async function deleteStyleAction(f: FormData) {
+  await requireAuth();
+  try {
+    deleteStyle(num(f, "id"));
+  } catch (e) {
+    back(styleHref(num(f, "id")), e instanceof Error ? e.message : String(e));
+  }
+  back("/admin/video", "已删除");
+}
+
+export async function makeSampleAction(f: FormData) {
+  await requireAuth();
+  const issue = configurationIssue(); if (issue) back("/admin/models", issue);
+  const id = enqueueRun("sample", "manual", { styleId: num(f, "id") });
+  redirect(`/admin/runs/${id}`);
+}
+
+// ---------- 讲解脚本 ----------
+
+/** 保存后台编辑的讲解脚本（客户端调用） */
+export async function saveScriptAction(digestId: number, edit: { title: string; styleId: number | null; shots: ShotEdit[] }) {
+  await requireAuth();
+  try {
+    // 编辑器直接用返回的脚本更新界面，不刷新页面（否则会重建编辑器、丢掉提示）
+    return { script: updateScript(digestId, edit) };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/** 让大模型按意见修改一个镜头的代码 */
+export async function reviseShotAction(digestId: number, shotId: string, instruction: string) {
+  await requireAuth();
+  try {
+    return { shot: await reviseShot(digestId, shotId, instruction.slice(0, 2000)) };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/** 按当前讲解脚本重新生成视频：只重写改过的镜头代码 */
+export async function regenerateFromScript(f: FormData) {
+  await requireAuth();
+  const issue = configurationIssue(); if (issue) back("/admin/models", issue);
+  const id = enqueueRun("digest", "manual", { videoDigestId: num(f, "digestId"), reuseScript: true });
+  redirect(`/admin/runs/${id}`);
+}
+
+// ---------- 提示词助手 ----------
+
+const asStage = (s: string) => ((REQUIREMENT_STAGES as readonly string[]).includes(s) ? (s as RequirementStage) : null);
+
+export async function askPromptAction(stage: string, versionId: number, text: string, conversationId?: number): Promise<{ conversationId?: number; messages?: Message[]; error?: string }> {
+  await requireAuth();
+  const st = asStage(stage);
+  if (!st) return { error: "环节无效" };
+  try {
+    return await askPromptAssistant(st, versionId, text.slice(0, 4000), conversationId);
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+export async function newPromptChatAction(stage: string) {
+  await requireAuth();
+  const st = asStage(stage);
+  if (!st) throw new Error("环节无效");
+  return newPromptConversation(st);
+}
+
+export async function saveRequirementDraftAction(messageId: number): Promise<{ id?: number; error?: string }> {
+  await requireAuth();
+  try {
+    const v = saveRequirementDraft(messageId);
+    revalidatePath("/admin/prompts");
+    return { id: v.id };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : String(e) };
+  }
 }

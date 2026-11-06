@@ -2,7 +2,8 @@ import { and, eq, gte, lt } from "drizzle-orm";
 import { db, schema } from "../db";
 import { env } from "../env";
 import { llmForStage } from "../llm";
-import { TREND_SYSTEM, trendPrompt } from "../prompts/trend";
+import { trendPrompt } from "../prompts/trend";
+import { requirementsFor } from "../requirements";
 import type { Notice } from "./notify";
 import type { Log } from "./select";
 
@@ -19,7 +20,7 @@ function monthRange(month: string) {
   return { start, end };
 }
 
-export function parseReport(text: string) {
+function parseReport(text: string) {
   const m = text.match(/^\s*(?:```\w*\s*)?---\s*\n([\s\S]*?)\n---\s*\n([\s\S]*)$/);
   if (!m) throw new Error("月报输出缺少元信息块");
   const title = m[1].match(/title:\s*(.+)/)?.[1]?.trim();
@@ -27,13 +28,13 @@ export function parseReport(text: string) {
   return { title, contentMd: m[2].replace(/```\s*$/, "").trim() };
 }
 
-/** 生成月报；当月没有解读时返回 null */
-export async function writeTrendReport(month: string, log: Log): Promise<{ month: string; title: string } | null> {
+/** 按当前（或运行锁定的）写作要求生成月报，不写库；当月没有解读时返回 null。试写也用它 */
+export async function generateReport(month: string, log: Log): Promise<{ parsed: { title: string; contentMd: string }; versionId: number } | null> {
   const { start, end } = monthRange(month);
   const digests = db
     .select()
     .from(schema.digests)
-    .where(and(eq(schema.digests.status, "published"), gte(schema.digests.createdAt, start), lt(schema.digests.createdAt, end)))
+    .where(and(gte(schema.digests.createdAt, start), lt(schema.digests.createdAt, end)))
     .all();
   if (!digests.length) {
     log(`${month} 没有解读，跳过月报`);
@@ -77,14 +78,15 @@ export async function writeTrendReport(month: string, log: Log): Promise<{ month
   const prev = db.select().from(schema.trendReports).where(eq(schema.trendReports.month, prevMonth)).get();
 
   const llm = llmForStage("report");
-  log(`撰写 ${month} 趋势月报（${digests.length} 篇解读，${llm.label}）…`);
+  const requirements = requirementsFor("report");
+  log(`撰写 ${month} 趋势月报（${digests.length} 篇解读，${llm.label}，写作要求 v${requirements.number}）…`);
   let parsed: ReturnType<typeof parseReport> | undefined;
   let lastErr: unknown;
   for (let i = 0; i < 2 && !parsed; i++) {
     try {
       parsed = parseReport(
         await llm.generate({
-          system: TREND_SYSTEM,
+          system: requirements.content,
           prompt: trendPrompt({ month, papers, tags, previous: prev ? `${prev.title}\n${prev.contentMd.slice(0, 3000)}` : "" }),
         }),
       );
@@ -94,10 +96,18 @@ export async function writeTrendReport(month: string, log: Log): Promise<{ month
     }
   }
   if (!parsed) throw lastErr;
+  return { parsed, versionId: requirements.id };
+}
 
+/** 生成并保存月报；当月没有解读时返回 null */
+export async function writeTrendReport(month: string, log: Log): Promise<{ month: string; title: string } | null> {
+  const result = await generateReport(month, log);
+  if (!result) return null;
+  const { parsed, versionId } = result;
+  const set = { ...parsed, requirementsVersionId: versionId };
   db.insert(schema.trendReports)
-    .values({ month, ...parsed })
-    .onConflictDoUpdate({ target: schema.trendReports.month, set: { ...parsed, createdAt: new Date().toISOString() } })
+    .values({ month, ...set })
+    .onConflictDoUpdate({ target: schema.trendReports.month, set: { ...set, createdAt: new Date().toISOString() } })
     .run();
   log(`月报完成：《${parsed.title}》`);
   return { month, title: parsed.title };

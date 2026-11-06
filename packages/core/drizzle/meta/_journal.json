@@ -64,6 +64,55 @@
       "when": 1793091144073,
       "tag": "0008_deep_surge",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1793151246344,
+      "tag": "0009_majestic_wild_child",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1793152734999,
+      "tag": "0010_medical_nicolaos",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1793154668107,
+      "tag": "0011_robust_ultimo",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1793158144733,
+      "tag": "0012_warm_cyclops",
+      "breakpoints": true
+    },
+    {
+      "version": "6",
+      "when": 1793601374955,
+      "idx": 13,
+      "breakpoints": true,
+      "tag": "0013_paper_chat_titles"
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1793794877570,
+      "tag": "0014_reading_highlights",
+      "breakpoints": true
+    },
+    {
+      "version": "6",
+      "when": 1793800000000,
+      "idx": 15,
+      "breakpoints": true,
+      "tag": "0015_highlight_colors"
     }
   ]
 }

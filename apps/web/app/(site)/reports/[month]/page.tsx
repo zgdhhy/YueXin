@@ -1,10 +1,10 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { eq } from "drizzle-orm";
-import { ArrowLeft } from "lucide-react";
-import { db, schema } from "@paper/core";
+import { ReaderTrail } from "@/components/reader/reader-trail";
+import { db, schema, reportSubject, getWholeNote, listReadingConversations, getReadingConversation } from "@paper/core";
 import { Markdown, extractToc } from "@/components/Markdown";
-import { MobileToc, ReadingProgress, Toc } from "@/components/site-client";
+import { ReadingProgress } from "@/components/site/site-client";
+import { ReaderWorkspace } from "@/components/reader/reader-workspace";
 
 export default async function ReportPage({ params }: { params: Promise<{ month: string }> }) {
   const { month } = await params;
@@ -12,5 +12,13 @@ export default async function ReportPage({ params }: { params: Promise<{ month: 
   if (!report) notFound();
   const toc = extractToc(report.contentMd);
   const [y, m] = report.month.split("-");
-  return <><ReadingProgress /><MobileToc items={toc} /><div className="reader-layout"><aside className="reader-sidebar"><nav className="reader-toc" aria-label="月报目录"><p>本期目录</p><Toc items={toc} /></nav></aside><div className="reader-body"><Link href="/reports" className="reader-back"><ArrowLeft size={15} />全部趋势月报</Link><header className="reader-heading"><p className="room-muted">{y} 年 {Number(m)} 月 / 研究趋势</p><h1>{report.title}</h1></header><article className="reading-sheet"><Markdown source={report.contentMd} /></article><div className="reader-related"><h2>回到具体研究</h2><p className="room-muted">在论文库中阅读每一篇解读，查看研究方法、实验与局限。</p><Link className="room-text-button" href="/library">浏览论文库</Link></div></div></div></>;
+  const subjectId = reportSubject(report.month);
+  const note = getWholeNote(subjectId);
+  const conversations = listReadingConversations(subjectId);
+  const initialMessages = conversations.length ? getReadingConversation(subjectId, conversations[0].id).messages.map(({ id, role, content }) => ({ id, role, content })) : [];
+  return <><ReadingProgress/><ReaderWorkspace key={subjectId} subjectId={subjectId} kind="report" toc={toc} note={note} conversations={conversations} initialMessages={initialMessages} overview={null}
+    heading={<header className="reader-heading"><div className="reader-topline"><ReaderTrail href="/reports" label="趋势月报" /><p className="reader-meta">{y} 年 {Number(m)} 月</p></div><h1>{report.title}</h1></header>}
+    resources={<div className="reader-resources"><p className="paper-original">{report.title}</p><p>{y} 年 {Number(m)} 月趋势月报</p></div>}>
+    <article className="reading-sheet"><Markdown reading source={report.contentMd}/></article>
+  </ReaderWorkspace></>;
 }

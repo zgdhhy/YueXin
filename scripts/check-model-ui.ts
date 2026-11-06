@@ -48,7 +48,7 @@ try{
   const create=async(name:string,preset="custom",protocol="openai")=>post({action:"save-provider",preset,name,protocol,apiKey:preset==="codex"?"":"UI-SECRET",baseUrl:preset==="codex"?"":"http://127.0.0.1:3102/v1"});
   const aid=(await create("DeepSeek","deepseek")).selectedId;
   const bid=(await create("备用服务商")).selectedId;
-  const cid=(await create("ChatGPT 订阅","codex","codex")).selectedId;
+  await create("ChatGPT 订阅","codex","codex");
   await post({action:"add-models",id:aid,models:["deepseek-chat","slow-model"]});await post({action:"add-models",id:bid,models:["ui-backup"]});
   let state=await snapshot();const primary=state.models.find((m:any)=>m.modelId==="deepseek-chat").id;const backup=state.models.find((m:any)=>m.modelId==="ui-backup").id;
   assert.equal(state.policy.confirmed,false);assert.equal(state.policy.defaultModelId,null);assert.ok(!JSON.stringify(state).includes("UI-SECRET"));
@@ -69,19 +69,18 @@ try{
   await page.locator(".mw-stage-row.is-default").click();
   await modal().locator("button.mw-choice").first().click();await choose("ui-backup");await close();
   await page.locator(".mw-stage-row.is-default").click();
-  await modal().getByText("已恢复未保存草稿，继续编辑",{exact:true}).waitFor();assert.ok(await modal().locator("button.mw-choice").first().textContent().then(t=>t?.includes("ui-backup")));
+  assert.equal(await modal().getByText("已恢复未保存草稿，继续编辑",{exact:true}).count(),0);assert.ok(await modal().locator("button.mw-choice").first().textContent().then(t=>t?.includes("deepseek-chat")));
   assert.equal((await snapshot()).policy.defaultModelId,primary);
-  await modal().getByRole("button",{name:"放弃草稿",exact:true}).click();
   await modal().getByRole("button",{name:"指定模型",exact:true}).click();await modal().locator("button.mw-choice").nth(1).click();await choose("ui-backup");
   await modal().getByRole("button",{name:"保存修改",exact:true}).click();await modal().waitFor({state:"detached"});
   await stage("论文解读").click();await modal().getByRole("button",{name:"不使用",exact:true}).click();await modal().getByRole("button",{name:"保存修改",exact:true}).click();await modal().waitFor({state:"detached"});
   await stage("趋势月报").click();await modal().getByRole("button",{name:"单独指定",exact:true}).click();await modal().getByRole("button",{name:"不使用",exact:true}).click();await modal().locator("button.mw-choice").first().click();await choose("ui-backup");await modal().getByRole("button",{name:"保存修改",exact:true}).click();await modal().waitFor({state:"detached"});
   state=await snapshot();assert.equal(state.resolved.digest.fallbackId,null);assert.equal(state.resolved.report.primaryId,backup);assert.equal(state.resolved.rerank.fallbackId,backup);
-  passed.push("默认草稿恢复与放弃、全局备用继承、显式关闭备用、月报独立覆盖");
+  passed.push("默认模型未保存的选择关闭即丢弃、全局备用继承、显式关闭备用、月报独立覆盖");
 
-  await providers();await (await section("DeepSeek")).locator(".mw-provider-head").click();await modal().locator('input[name="name"]').fill("服务商草稿");await close("escape");
-  await (await section("DeepSeek")).locator(".mw-provider-head").click();assert.equal(await modal().locator('input[name="name"]').inputValue(),"服务商草稿");await modal().getByRole("button",{name:"放弃草稿",exact:true}).click();await modal().locator('input[name="name"]').fill("");await modal().getByRole("button",{name:"保存修改",exact:true}).click();await modal().getByText("请输入服务商名称",{exact:true}).waitFor();await close();
-  passed.push("服务商弹窗恢复草稿、字段就近报错、关闭不弹浏览器确认");
+  await providers();await (await section("DeepSeek")).locator(".mw-provider-head").click();await modal().locator('input[name="name"]').fill("未保存的服务商名称");await close("escape");
+  await (await section("DeepSeek")).locator(".mw-provider-head").click();assert.equal(await modal().locator('input[name="name"]').inputValue(),"DeepSeek");assert.equal(await modal().locator(".mw-draft").count(),0);await modal().locator('input[name="name"]').fill("");await modal().getByRole("button",{name:"保存修改",exact:true}).click();await modal().getByText("请输入服务商名称",{exact:true}).waitFor();await close();
+  passed.push("服务商未保存的修改关闭即丢弃、字段就近报错、关闭不弹浏览器确认");
 
   await page.getByRole("button",{name:"添加服务商",exact:true}).click();await modal().getByRole("textbox",{name:"搜索服务商，如 DeepSeek、Codex",exact:true}).fill("custom");await modal().getByRole("button",{name:/自定义/}).click();
   await modal().locator('input[name="name"]').fill("新增测试服务商");await modal().locator('input[name="apiKey"]').fill("UI-NEW-SECRET");await modal().locator('input[name="baseUrl"]').fill("http://127.0.0.1:3102/v1");await modal().getByRole("button",{name:"添加服务商",exact:true}).click();await modal().waitFor({state:"detached"});

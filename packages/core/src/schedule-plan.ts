@@ -10,8 +10,8 @@ export type ReportPlan = { kind: "trend_report"; enabled: boolean; day: number; 
 export type SchedulePlan = DigestPlan | ReportPlan;
 export type ScheduleKind = SchedulePlan["kind"];
 
-export const SCHEDULE_KINDS = ["digest", "trend_report"] as const;
-export const PLAN_NAMES: Record<ScheduleKind, string> = { digest: "论文精选", trend_report: "趋势月报" };
+const SCHEDULE_KINDS = ["digest", "trend_report"] as const;
+const PLAN_NAMES: Record<ScheduleKind, string> = { digest: "论文精选", trend_report: "趋势月报" };
 export const WEEKDAYS = ["日", "一", "二", "三", "四", "五", "六"];
 /** 月报日期上限：避开没有 29–31 号的月份 */
 export const MAX_REPORT_DAY = 28;
@@ -77,7 +77,7 @@ export function cronToPlan(row: { kind: ScheduleKind; cron: string; enabled: boo
   return { kind: "trend_report", enabled: row.enabled, day, time };
 }
 
-export const clampPicks = (n: number) => Math.min(MAX_PICKS, Math.max(1, Math.round(n) || 1));
+const clampPicks = (n: number) => Math.min(MAX_PICKS, Math.max(1, Math.round(n) || 1));
 
 type ScheduleRow = typeof schema.schedules.$inferSelect;
 

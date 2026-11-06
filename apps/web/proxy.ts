@@ -8,5 +8,6 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!login|_next/static|_next/image|favicon.ico|icon.svg|apple-icon.png).*)"],
+  // 参考视频上传不经过 proxy：proxy 会把请求体缓存在内存且超过上限时静默截断；该接口自己校验会话
+  matcher: ["/((?!login|api/admin/style-reference|_next/static|_next/image|favicon.ico|icon.svg|apple-icon.png).*)"],
 };

@@ -19,7 +19,7 @@ const clean = (s: string) =>
     .trim();
 
 /** 把 arXiv HTML（LaTeXML 生成）转换成带标题层级的纯文本，公式保留为 LaTeX */
-export function htmlToText(html: string): { text: string; figures: { label: string; caption: string; src: string }[] } {
+function htmlToText(html: string): { text: string; figures: { label: string; caption: string; src: string }[] } {
   const $ = cheerio.load(html);
   const article = $("article.ltx_document").first();
   article.find(".ltx_bibliography, nav, .ltx_page_footer, .ltx_authors").remove();
@@ -128,4 +128,12 @@ export async function fetchPaperContent(id: string, log: (s: string) => void): P
       .run();
   }
   return content;
+}
+
+/** 已缓存的论文全文（截断到 max 字符）；没有缓存时返回空串，不发网络请求 */
+export function cachedPaperText(id: string, max: number) {
+  const file = dataPath("papers", id, "content.json");
+  if (id.includes("..") || !fs.existsSync(file)) return "";
+  const text = (JSON.parse(fs.readFileSync(file, "utf8")) as PaperContent).text;
+  return text.length > max ? text.slice(0, max) : text;
 }

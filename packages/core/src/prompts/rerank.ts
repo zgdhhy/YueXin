@@ -9,11 +9,19 @@ export function rerankPrompt(args: {
   alternates: number;
   topics: string;
   history: string;
+  liked: string;
+  disliked: string;
   fresh: string;
   notable: string;
 }) {
   return `## 读者关注的方向（权重越高越关注；与这些方向无关但特别重磅的论文也可以入选）
 ${args.topics}
+
+## 读者的反馈（偏好样例：多推荐与「感兴趣」相近的，少推荐与「不想看」相近的；方向一致时仍以论文本身的价值为准）
+感兴趣：
+${args.liked || "（暂无）"}
+不想看：
+${args.disliked || "（暂无）"}
 
 ## 最近已推荐过的论文（避免重复同一主题，除非出现重大进展）
 ${args.history || "（暂无）"}

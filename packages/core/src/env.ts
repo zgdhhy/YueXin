@@ -12,7 +12,7 @@ function findRoot(start: string): string {
   }
 }
 
-export const ROOT_DIR = findRoot(process.cwd());
+const ROOT_DIR = findRoot(process.cwd());
 
 const envFile = path.join(ROOT_DIR, ".env");
 if (fs.existsSync(envFile)) process.loadEnvFile(envFile);

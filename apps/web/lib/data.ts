@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import fs from "node:fs";
-import { db, schema, dataPath } from "@paper/core";
+import { db, schema, dataPath, listMarks, listNotes } from "@paper/core";
 
 const d = schema.digests;
 
@@ -11,7 +11,6 @@ export type DigestCard = {
   oneLiner: string;
   pickReason: string | null;
   notable: boolean;
-  status: "published" | "hidden";
   createdAt: string;
   paperTitle: string;
   organization: string | null;
@@ -19,8 +18,11 @@ export type DigestCard = {
   /** 封面：论文第一张原图（相对 DATA_DIR） */
   cover: string | null;
   videoSec: number | null;
+  /** 视频文件（相对 DATA_DIR） */
+  videoPath: string | null;
   /** 解读字数 */
   chars: number;
+  notInterested: boolean;
 };
 
 function enrich<T extends { id: number; paperId: string }>(rows: T[]) {
@@ -44,21 +46,26 @@ function enrich<T extends { id: number; paperId: string }>(rows: T[]) {
     .orderBy(asc(schema.figures.id))
     .all();
   const vids = db
-    .select({ digestId: schema.videos.digestId, sec: schema.videos.durationSec })
+    .select({ digestId: schema.videos.digestId, sec: schema.videos.durationSec, path: schema.videos.path })
     .from(schema.videos)
     .where(inArray(schema.videos.digestId, ids))
     .all();
-  return rows.map((r) => ({
-    ...r,
-    tags: links.filter((l) => l.digestId === r.id).map((l) => l.name),
-    cover: figs.find((f) => f.paperId === r.paperId && fs.existsSync(dataPath(f.path)))?.path ?? null,
-    videoSec: vids.find((v) => v.digestId === r.id)?.sec ?? null,
-  }));
+  const marks = new Map(listMarks().map((m) => [m.paperId, m]));
+  return rows.map((r) => {
+    return {
+      ...r,
+      tags: links.filter((l) => l.digestId === r.id).map((l) => l.name),
+      cover: figs.find((f) => f.paperId === r.paperId && fs.existsSync(dataPath(f.path)))?.path ?? null,
+      videoSec: vids.find((v) => v.digestId === r.id)?.sec ?? null,
+      videoPath: vids.find((v) => v.digestId === r.id)?.path ?? null,
+      notInterested: marks.get(r.paperId)?.notInterested ?? false,
+    };
+  });
 }
 
-export function listDigests(opts: { includeHidden?: boolean; ids?: number[] } = {}): DigestCard[] {
+/** 全部解读；历史「不感兴趣」标记不影响展示，只在后台显示 */
+export function listDigests(opts: { ids?: number[] } = {}): DigestCard[] {
   const conds = [];
-  if (!opts.includeHidden) conds.push(eq(d.status, "published"));
   if (opts.ids) conds.push(inArray(d.id, opts.ids.length ? opts.ids : [-1]));
   const rows = db
     .select({
@@ -68,7 +75,6 @@ export function listDigests(opts: { includeHidden?: boolean; ids?: number[] } = 
       oneLiner: d.oneLiner,
       pickReason: d.pickReason,
       notable: d.notable,
-      status: d.status,
       createdAt: d.createdAt,
       contentMd: d.contentMd,
       paperTitle: schema.papers.title,
@@ -91,6 +97,7 @@ export function getDigestByPaper(paperId: string) {
     .get();
   if (!row) return null;
   const [withTags] = enrich([row.digests]);
+  const notes = listNotes(paperId);
   const alternates = db
     .select({ paperId: schema.candidates.paperId, reason: schema.candidates.reason, title: schema.papers.title })
     .from(schema.candidates)
@@ -108,21 +115,16 @@ export function getDigestByPaper(paperId: string) {
     alternates,
     figures,
     video,
+    notes,
     newer: idx > 0 ? all[idx - 1] : null,
     older: idx >= 0 && idx < all.length - 1 ? all[idx + 1] : null,
   };
 }
 
+/** 标签与篇数 */
 export function tagCounts() {
-  const rows = db
-    .select({ name: schema.tags.name, digestId: schema.digestTags.digestId })
-    .from(schema.digestTags)
-    .innerJoin(schema.tags, eq(schema.tags.id, schema.digestTags.tagId))
-    .innerJoin(d, eq(d.id, schema.digestTags.digestId))
-    .where(eq(d.status, "published"))
-    .all();
   const counts = new Map<string, number>();
-  for (const r of rows) counts.set(r.name, (counts.get(r.name) ?? 0) + 1);
+  for (const x of listDigests()) for (const t of x.tags) counts.set(t, (counts.get(t) ?? 0) + 1);
   return [...counts.entries()].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
 }
 

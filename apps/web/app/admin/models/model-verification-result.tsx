@@ -5,7 +5,7 @@ import { Loader2 } from "lucide-react";
 import type { WorkspaceData, WorkspaceModel, WorkspaceProvider } from "@/lib/model-workspace";
 import { Action, Dialog, type Act } from "./workspace-ui";
 
-/** 验证结果独立于添加表单，进度由页面中的模型请求决定，不写入草稿。 */
+/** 验证结果独立于添加表单，进度由页面中的模型请求决定。 */
 export function ModelVerificationResult({ model, provider, policy, act, testing, onTest, onClose }: {
   model: WorkspaceModel; provider: WorkspaceProvider; policy: WorkspaceData["policy"]; act: Act;
   testing: boolean; onTest: () => void; onClose: () => void;

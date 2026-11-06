@@ -3,9 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import { ExternalLink, Eye, EyeOff, RefreshCw } from "lucide-react";
 import type { WorkspaceData, WorkspaceModel, WorkspaceProvider } from "@/lib/model-workspace";
-import { LlmIconImg } from "@/components/llm-icon-img";
-import { Dropdown } from "@/components/dropdown";
-import { ConnectionFields, protocolLabels, type ConnectionDraft } from "./connection-fields";
+import { LlmIconImg } from "@/components/admin/llm-icon-img";
+import { Dropdown } from "@/components/admin/dropdown";
+import { ConnectionFields, protocolLabels, type ConnectionValues } from "./connection-fields";
 import { supportsEffort } from "@paper/core/connection";
 import type { Protocol, ProviderOptions } from "@paper/core/connection";
 import type { RemoteModel } from "@paper/core";
@@ -13,21 +13,22 @@ import { ProviderCatalog } from "./provider-catalog";
 import { VerificationPill, usable } from "./providers-section";
 import { presetFamily } from "@/lib/provider-catalog";
 import { PROVIDER_ICONS, guessProviderIcon, type LlmIcon } from "@paper/core/icons";
-import { Action, Dialog, DraftHint, FormField, IconButton, SearchInput, TextInput, request, useDraft, type Act, type DraftStore } from "./workspace-ui";
+import { Action, Dialog, FormField, IconButton, SearchInput, TextInput, request, type Act } from "./workspace-ui";
 
-type Common = { onClose: () => void; act: Act; store: DraftStore; data: WorkspaceData };
+type Common = { onClose: () => void; act: Act; data: WorkspaceData };
 const host = (url: string) => { try { return ["http:", "https:"].includes(new URL(url).protocol); } catch { return false; } };
 
 /** 编辑已有服务商时，onToggle / onDelete / onAccount 由页面提供，显示在弹窗内。 */
-export function ProviderEditor({ provider, data, store, act, onClose, onSaved, onToggle, onDelete, onAccount }: Common & { provider?: WorkspaceProvider; onSaved: (id: number) => void; onToggle?: () => void; onDelete?: () => void; onAccount?: () => void }) {
-  const key = provider ? `provider:${provider.id}` : "new-provider";
-  const { draft: d, setDraft, discard, resumed, alive } = useDraft(store, key, () => ({
+export function ProviderEditor({ provider, data, act, onClose, onSaved, onToggle, onDelete, onAccount }: Common & { provider?: WorkspaceProvider; onSaved: (id: number) => void; onToggle?: () => void; onDelete?: () => void; onAccount?: () => void }) {
+  const [d, setForm] = useState(() => ({
     presetId: provider?.preset ?? "", name: provider?.name ?? "", icon: provider?.customIcon ?? "", protocol: (provider?.protocol ?? "openai") as Protocol,
-    baseUrl: provider?.baseUrl ?? "", apiKey: "", phase: provider ? "provider" : "template", providerId: provider?.id ?? null,
-    family: "", modelsUrl: provider?.options?.modelsUrl ?? "", fullUrl: provider?.options?.fullUrl ?? false, authMode: (provider?.options?.authMode ?? "auto") as ConnectionDraft["authMode"], requestHeaders: "", clearHeaders: false, timeoutSec: String((provider?.options?.timeoutMs ?? 1800000)/1000), maxTokensField: (provider?.options?.maxTokensField ?? "max_tokens") as ConnectionDraft["maxTokensField"], reasoning: (provider?.options?.reasoning ?? "auto") as ConnectionDraft["reasoning"],
+    baseUrl: provider?.baseUrl ?? "", apiKey: "", phase: provider ? "provider" : "template",
+    modelsUrl: provider?.options?.modelsUrl ?? "", fullUrl: provider?.options?.fullUrl ?? false, authMode: (provider?.options?.authMode ?? "auto") as ConnectionValues["authMode"], requestHeaders: "", clearHeaders: false, timeoutSec: String((provider?.options?.timeoutMs ?? 1800000)/1000), maxTokensField: (provider?.options?.maxTokensField ?? "max_tokens") as ConnectionValues["maxTokensField"], reasoning: (provider?.options?.reasoning ?? "auto") as ConnectionValues["reasoning"],
     clientRequestId: crypto.randomUUID(), search: "", category: "all", saving: false, error: "", fields: {} as Record<string,string>,
   }));
-  const patch = (next: Partial<typeof d>) => setDraft((prev) => ({ ...prev, ...next }));
+  const alive = useRef(true);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+  const patch = (next: Partial<typeof d>) => setForm((prev) => ({ ...prev, ...next }));
   const [visible, setVisible] = useState(false);
   const preset = data.presets.find((p) => p.id === d.presetId);
   const choose = (id: string) => {
@@ -50,11 +51,11 @@ export function ProviderEditor({ provider, data, store, act, onClose, onSaved, o
       for(const key of Object.keys(defaults) as (Exclude<keyof ProviderOptions,"headers">)[])if(options[key]===(provider.options?.[key]??defaults[key]))delete options[key];
     }
     patch({ saving: true, error: "", fields: {} });
-    const r = await act({ action: "save-provider", id: d.providerId ?? undefined, clientRequestId: d.clientRequestId,
+    const r = await act({ action: "save-provider", id: provider?.id, clientRequestId: d.clientRequestId,
       preset: preset.id, name: d.name, icon:d.icon || null, baseUrl: d.baseUrl, protocol: d.protocol, apiKey: d.apiKey, clearHeaders:d.clearHeaders, options }, "服务商配置已保存", (e) => { if (alive.current) patch({ error: e.message, fields: e.fields }); });
     if (r?.selectedId) {
       onSaved(r.selectedId);
-      if (alive.current) { discard(); onClose(); }
+      if (alive.current) onClose();
     } else if (alive.current) patch({ saving: false });
   };
   const versions=preset?data.presets.filter(p=>presetFamily(p)===presetFamily(preset)):[];
@@ -63,7 +64,6 @@ export function ProviderEditor({ provider, data, store, act, onClose, onSaved, o
     footerStart={provider&&<><button type="button" className="mw-text-action" onClick={onToggle}>{provider.enabled?"停用":"启用"}</button><button type="button" className="mw-text-action is-danger" onClick={onDelete}>删除服务商</button></>}
     footer={d.phase==="template"?undefined:<Action form="provider-editor" type="submit" tone="primary" busy={d.saving}>{provider?"保存修改":"添加服务商"}</Action>}>
     {d.phase==="template"?<ProviderCatalog presets={data.presets} query={d.search} category={d.category} onQuery={search=>patch({search})} onCategory={category=>patch({category})} onChoose={choose}/>:preset&&<form noValidate id="provider-editor" onSubmit={submit}><fieldset disabled={d.saving} className="space-y-5">
-      <DraftHint resumed={resumed&&store.has(key)} onDiscard={()=>{if(!d.saving)discard();}}/>
       {d.error&&<p role="alert" className="mw-error">{d.error}</p>}
       {provider?.authType==="oauth"&&<div className="mw-status-block"><span className={provider.connected?"mw-pill is-good":"mw-pill is-warn"}>{provider.connected?"已授权":"待登录"}</span><span className="min-w-0 flex-1 break-all">{provider.connected?`${provider.account ?? "ChatGPT 账号"}${provider.plan ? ` · ${provider.plan}` : ""}`:"登录后才能添加和使用模型"}</span><Action onClick={onAccount}>{provider.connected?"管理账号":"登录账号"}</Action></div>}
       {preset.id!=="custom"&&<div className="mw-preset"><span className="catalog-logo"><LlmIconImg icon={d.icon as LlmIcon || preset.icon || guessProviderIcon({name:d.name,baseUrl:d.baseUrl})} name={preset.name} size={26}/></span><div className="min-w-0 flex-1"><strong>{preset.familyName??preset.name}</strong>{preset.note&&<p>{preset.note}</p>}</div>{preset.keyUrl&&<a href={preset.keyUrl} target="_blank" rel="noreferrer">{preset.authType==="oauth"?"服务商平台":"获取 API Key"}<ExternalLink size={14}/></a>}</div>}
@@ -79,20 +79,21 @@ export function ProviderEditor({ provider, data, store, act, onClose, onSaved, o
   </Dialog>;
 }
 
-export function ModelsPicker({ provider, data, store, act, onClose, onAdded }: Common & { provider:WorkspaceProvider; onAdded:(id:number,showResult?:boolean)=>void }) {
-  const key = `models:${provider.id}`;
-  const { draft:d, setDraft, discard, resumed, alive } = useDraft(store,key,()=>({ batch:"", batchMessage:"", query:"", manual:"", chosen:"", metadata:[] as RemoteModel[], remote:[] as string[], loaded:false, error:"", loadError:"" }));
-  const patch = (next:Partial<typeof d>) => setDraft((prev)=>({...prev,...next}));
+export function ModelsPicker({ provider, data, act, onClose, onAdded }: Common & { provider:WorkspaceProvider; onAdded:(id:number,showResult?:boolean)=>void }) {
+  const [d, setForm] = useState(()=>({ batch:"", batchMessage:"", manual:"", chosen:"", metadata:[] as RemoteModel[], remote:[] as string[], error:"", loadError:"" }));
+  const alive = useRef(true);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+  const patch = (next:Partial<typeof d>) => setForm((prev)=>({...prev,...next}));
   const [loading,setLoading] = useState(false);
   const [saving,setSaving] = useState(false);
   const controller = useRef<AbortController|null>(null);
   const load = async()=>{
     controller.current?.abort(); const c=new AbortController(); controller.current=c; setLoading(true); patch({loadError:""});
-    try { const r=await request({action:"remote-models",id:provider.id},c.signal); if(!c.signal.aborted) patch({remote:r.models?.map(m=>m.modelId)??[],metadata:r.models??[],loaded:true}); }
+    try { const r=await request({action:"remote-models",id:provider.id},c.signal); if(!c.signal.aborted) patch({remote:r.models?.map(m=>m.modelId)??[],metadata:r.models??[]}); }
     catch(e){if(!c.signal.aborted)patch({loadError:e instanceof Error?e.message:"获取失败"});}
     finally{if(alive.current&&!c.signal.aborted)setLoading(false);}
   };
-  useEffect(()=>{if(!d.loaded)void load();return()=>controller.current?.abort();},[provider.id]);
+  useEffect(()=>{void load();return()=>controller.current?.abort();},[provider.id]);
   const added=new Set(data.models.filter(m=>m.providerId===provider.id).map(m=>m.modelId));
   const preset=data.presets.find(p=>p.id===provider.preset);
   const candidates=[...new Set([...(preset?.models??[]),...d.remote])].filter(id=>!added.has(id));
@@ -101,12 +102,11 @@ export function ModelsPicker({ provider, data, store, act, onClose, onAdded }: C
     if(!chosen||saving)return;
     if(/[,，\n]/.test(chosen)){patch({error:"每次先添加一个模型，请填写单个模型 ID"});return;}
     setSaving(true);patch({error:""});
-    const submitted=store.get(key);
     const r=await act({action:"add-models",id:provider.id,models:[chosen],metadata:d.metadata.filter(m=>m.modelId===chosen)},"模型已添加",e=>{if(alive.current)patch({error:e.message});});
     const id=r?.addedModelIds?.[0];
-    if(!alive.current){if(id){if(store.get(key)===submitted)store.delete(key);onAdded(id,false);}return;}
+    if(!alive.current){if(id)onAdded(id,false);return;}
     setSaving(false);
-    if(id){discard();onAdded(id);}
+    if(id)onAdded(id);
   };
   const addBatch=async()=>{
     if(saving)return;
@@ -121,23 +121,23 @@ export function ModelsPicker({ provider, data, store, act, onClose, onAdded }: C
   return <Dialog tall title="添加模型" subtitle={provider.name} onClose={onClose}
     footer={<><Action onClick={onClose}>取消</Action><Action tone="primary" busy={saving} disabled={!chosen} onClick={add}>添加并测试</Action></>}>
     <div className="space-y-4">
-    <DraftHint resumed={resumed&&store.has(key)} onDiscard={()=>{if(!saving)discard();}} />
     {d.error&&<p role="alert" className="mw-error">{d.error}</p>}
       <div className="flex items-center gap-2"><SearchInput autoFocus value={d.manual} onChange={manual=>patch({manual,chosen:""})} label="模型 ID" placeholder="搜索或直接填写模型 ID"/><IconButton label="刷新列表" disabled={loading} onClick={load}><RefreshCw size={17} className={loading?"animate-spin":undefined}/></IconButton></div>
       {d.loadError&&<div role="alert" className="mw-warning"><p>无法获取模型列表，可直接填写模型 ID。</p><details className="mt-2"><summary>查看原因</summary><p className="mt-2 break-words">{d.loadError}</p></details></div>}
-      <div className="space-y-2">{shown.map(id=><label key={id} className={`mw-choice ${d.chosen===id?"is-selected":""}`}><input type="radio" name="model-choice" value={id} checked={d.chosen===id} onChange={()=>patch({chosen:id})} className="accent-[#126f82]"/><code className="min-w-0 flex-1 break-all text-sm">{id}</code></label>)}
+      <div className="space-y-2">{shown.map(id=><label key={id} className={`mw-choice ${d.chosen===id?"is-selected":""}`}><input type="radio" name="model-choice" value={id} checked={d.chosen===id} onChange={()=>patch({chosen:id})} className="accent-[var(--ds-accent)]"/><code className="min-w-0 flex-1 break-all text-sm">{id}</code></label>)}
       {loading&&!shown.length&&[1,2,3].map(i=><div key={i} className="h-12 animate-pulse rounded-md bg-slate-50"/>)}
       {!loading&&!shown.length&&<p className="mw-empty">{filter?`列表中没有此模型，将直接添加「${d.manual.trim()}」`:"暂无可选模型，请直接填写模型 ID"}</p>}</div>
-      <details className="mw-details"><summary>批量添加</summary><div className="space-y-4"><FormField label="模型 ID，一行一个或用逗号分隔"><textarea className="mw-input min-h-24" value={d.batch} onChange={e=>patch({batch:e.target.value})} placeholder={(candidates.length?candidates.slice(0,2):["model-a","model-b"]).join("\n")}/></FormField><Action disabled={saving || !d.batch.trim()} busy={saving} onClick={addBatch}>保存批量模型</Action>{d.batchMessage&&<p role="status" className="text-sm text-[#126f82]">{d.batchMessage}</p>}</div></details>
+      <details className="mw-details"><summary>批量添加</summary><div className="space-y-4"><FormField label="模型 ID，一行一个或用逗号分隔"><textarea className="mw-input min-h-24" value={d.batch} onChange={e=>patch({batch:e.target.value})} placeholder={(candidates.length?candidates.slice(0,2):["model-a","model-b"]).join("\n")}/></FormField><Action disabled={saving || !d.batch.trim()} busy={saving} onClick={addBatch}>保存批量模型</Action>{d.batchMessage&&<p role="status" className="text-sm text-[var(--ds-accent)]">{d.batchMessage}</p>}</div></details>
     </div>
   </Dialog>;
 }
 
 /** 模型弹窗：顶部是验证状态，底部左侧停用/删除，右侧设为默认与保存。 */
-export function ModelEditor({ model,provider,data,store,act,onClose,testing,onTest,onToggle,onDelete,onDefault }:Common&{model:WorkspaceModel;provider:WorkspaceProvider;testing:boolean;onTest:()=>void;onToggle:()=>void;onDelete:()=>void;onDefault?:()=>void}){
-  const key=`model:${model.id}`;
-  const {draft:d,setDraft,discard,resumed,alive}=useDraft(store,key,()=>({displayName:model.displayName??"",upstreamModelId:model.upstreamModelId??"",contextWindow:model.contextWindow?.toString()??"",maxOutputTokens:model.maxOutputTokens.toString(),effort:model.effort??"",priceInput:model.priceInput?.toString()??"",priceOutput:model.priceOutput?.toString()??"",saving:false,error:""}));
-  const patch=(next:Partial<typeof d>)=>setDraft(prev=>({...prev,...next}));
+export function ModelEditor({ model,provider,act,onClose,testing,onTest,onToggle,onDelete,onDefault }:Common&{model:WorkspaceModel;provider:WorkspaceProvider;testing:boolean;onTest:()=>void;onToggle:()=>void;onDelete:()=>void;onDefault?:()=>void}){
+  const [d,setForm]=useState(()=>({displayName:model.displayName??"",upstreamModelId:model.upstreamModelId??"",contextWindow:model.contextWindow?.toString()??"",maxOutputTokens:model.maxOutputTokens.toString(),effort:model.effort??"",priceInput:model.priceInput?.toString()??"",priceOutput:model.priceOutput?.toString()??"",saving:false,error:""}));
+  const alive = useRef(true);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+  const patch=(next:Partial<typeof d>)=>setForm(prev=>({...prev,...next}));
   const reasoning=supportsEffort(provider, {...model, upstreamModelId:d.upstreamModelId || null});
   const v=model.verification;
   return <Dialog title={model.displayName||model.modelId} subtitle={model.displayName?`${provider.name} · ${model.modelId}`:provider.name} onClose={onClose}
@@ -145,11 +145,10 @@ export function ModelEditor({ model,provider,data,store,act,onClose,testing,onTe
     footer={<>{onDefault&&<Action onClick={onDefault}>设为默认</Action>}<Action type="submit" form="model-editor" tone="primary" busy={d.saving}>保存修改</Action></>}>
     <div className="mw-status-block"><VerificationPill model={model} provider={provider} testing={testing}/><span className="min-w-0 flex-1">{!testing&&v.status==="passed"&&v.latencyMs!=null?`${(v.latencyMs/1000).toFixed(1)} 秒`:""}</span><Action busy={testing} disabled={!usable(provider)} onClick={onTest}>测试连接</Action></div>
     {!testing&&v.status==="failed"&&v.error&&<p className="mw-error mt-3 break-words">{v.error}</p>}
-    <DraftHint resumed={resumed&&store.has(key)} onDiscard={()=>{if(!d.saving)discard();}}/>
     <form id="model-editor" className="mt-5 space-y-6" onSubmit={async e=>{
       e.preventDefault();if(d.saving)return;patch({saving:true,error:""});
-      const r=await act({action:"save-model",id:model.id,displayName:d.displayName,upstreamModelId:d.upstreamModelId || null,contextWindow:d.contextWindow?Number(d.contextWindow):null,maxOutputTokens:Number(d.maxOutputTokens),effort:reasoning&&d.effort?d.effort:null,priceInput:d.priceInput?Number(d.priceInput):null,priceOutput:d.priceOutput?Number(d.priceOutput):null},"模型参数已保存",e=>patch({error:e.message}));
-      patch({saving:false});if(r){discard();if(alive.current)onClose();}
+      const r=await act({action:"save-model",id:model.id,displayName:d.displayName,upstreamModelId:d.upstreamModelId || null,contextWindow:d.contextWindow?Number(d.contextWindow):null,maxOutputTokens:Number(d.maxOutputTokens),effort:reasoning&&d.effort?d.effort:null,priceInput:d.priceInput?Number(d.priceInput):null,priceOutput:d.priceOutput?Number(d.priceOutput):null},"模型参数已保存",e=>{if(alive.current)patch({error:e.message});});
+      if(!alive.current)return;patch({saving:false});if(r)onClose();
     }}><fieldset disabled={d.saving} className="space-y-6">
       {d.error&&<p role="alert" className="mw-error">{d.error}</p>}
       <FormField label="显示名称"><TextInput autoFocus name="displayName" value={d.displayName} onChange={e=>patch({displayName:e.target.value})} placeholder={model.modelId}/></FormField>

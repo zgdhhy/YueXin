@@ -1,7 +1,6 @@
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema } from "./db";
-import { ensureSchedulePlans } from "./schedule-plan";
 
 export const selectionSchema = z.object({
   sources: z.object({ hf: z.boolean(), arxiv: z.boolean() }),
@@ -17,19 +16,20 @@ export const selectionSchema = z.object({
   institutions: z.array(z.string()),
 });
 
-export const STAGES = ["rerank", "digest", "storyboard", "report"] as const;
+/** 调用大模型的环节；chat（对话）供助手与论文追问使用，不在运行中出现 */
+const STAGES = ["rerank", "digest", "storyboard", "code", "report", "chat"] as const;
 export type Stage = (typeof STAGES)[number];
 
 export const EFFORTS = ["low", "medium", "high", "xhigh", "max"] as const;
 
-export const stageConfigSchema = z.object({
+const stageConfigSchema = z.object({
   /** llm_models.id；为空时用第一个可用模型 */
   modelId: z.number().int().nullable(),
   /** 主模型失败（重试后仍失败）时改用的模型 */
   fallbackModelId: z.number().int().nullable(),
 });
 
-export const stagesSchema = z.object({
+const stagesSchema = z.object({
   rerank: stageConfigSchema,
   digest: stageConfigSchema,
   storyboard: stageConfigSchema,
@@ -42,6 +42,17 @@ export const videoSchema = z.object({
   musicVolume: z.number().min(0).max(1),
   /** 中文字幕阅读速度（字/秒） */
   readingSpeed: z.number().min(2).max(12),
+  /** auto：写讲解脚本时由大模型从启用的风格里挑；fixed：固定用 styleId */
+  styleMode: z.enum(["auto", "fixed"]),
+  styleId: z.number().int().nullable(),
+  /** 旁白：用 OpenAI 兼容服务商的语音合成朗读字幕 */
+  narration: z.object({
+    enabled: z.boolean(),
+    providerId: z.number().int().nullable(),
+    model: z.string(),
+    voice: z.string(),
+    speed: z.number().min(0.5).max(2),
+  }),
 });
 
 const defs = {
@@ -72,7 +83,15 @@ const defs = {
   },
   video: {
     schema: videoSchema,
-    default: { enabled: true, musicMode: "procedural", musicVolume: 0.25, readingSpeed: 5 } satisfies z.infer<
+    default: {
+      enabled: true,
+      musicMode: "procedural",
+      musicVolume: 0.25,
+      readingSpeed: 5,
+      styleMode: "auto",
+      styleId: null,
+      narration: { enabled: false, providerId: null, model: "", voice: "", speed: 1 },
+    } satisfies z.infer<
       typeof videoSchema
     >,
   },
@@ -114,23 +133,6 @@ export function setSetting<K extends SettingKey>(key: K, value: SettingValue<K>)
     .values({ key, value: v })
     .onConflictDoUpdate({ target: schema.settings.key, set: { value: v } })
     .run();
-}
-
-/** 首次启动写入默认主题；保证每种运行各有一个定时计划 */
-export function seedDefaults() {
-  if (!db.select().from(schema.topics).limit(1).get()) {
-    db.insert(schema.topics)
-      .values([
-        { name: "大语言模型", arxivCategories: ["cs.CL"], keywords: ["language model", "LLM", "pretraining", "scaling", "transformer", "attention"], weight: 1.5 },
-        { name: "智能体 Agent", arxivCategories: ["cs.AI", "cs.MA"], keywords: ["agent", "agentic", "tool use", "planning", "computer use"], weight: 1.5 },
-        { name: "推理与强化学习", arxivCategories: ["cs.LG", "cs.AI"], keywords: ["reasoning", "reinforcement learning", "RL", "RLHF", "chain-of-thought", "test-time"], weight: 1.5 },
-        { name: "多模态", arxivCategories: ["cs.CV", "cs.CL"], keywords: ["multimodal", "vision-language", "VLM", "video generation", "diffusion", "image generation"], weight: 1.2 },
-        { name: "AI 基础设施与效率", arxivCategories: ["cs.LG", "cs.DC"], keywords: ["inference", "efficient", "quantization", "MoE", "mixture of experts", "kernel", "distillation"], weight: 1.0 },
-        { name: "对齐与安全", arxivCategories: ["cs.AI", "cs.CL"], keywords: ["alignment", "safety", "interpretability", "red teaming"], weight: 1.0 },
-      ])
-      .run();
-  }
-  ensureSchedulePlans();
 }
 
 const HEARTBEAT_KEY = "workerHeartbeat";

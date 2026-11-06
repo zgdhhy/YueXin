@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useId, useRef } from "react";
 import { ArrowLeft, Loader2, Search, X } from "lucide-react";
 import type { WorkspaceData } from "@/lib/model-workspace";
 import type { RemoteModel } from "@paper/core";
@@ -26,32 +26,6 @@ export async function request(command?: object, signal?: AbortSignal): Promise<A
 }
 export type Act = (command: object, message?: string, onError?: (error: ApiError) => void) => Promise<ApiResult | null>;
 
-export class DraftStore {
-  private values = new Map<string, unknown>();
-  private listeners = new Map<string, Set<() => void>>();
-  get<T>(key: string) { return this.values.get(key) as T | undefined; }
-  has(key: string) { return this.values.has(key); }
-  set<T>(key: string, value: T) { this.values.set(key, value); this.listeners.get(key)?.forEach((f) => f()); }
-  delete(key: string) { this.values.delete(key); this.listeners.get(key)?.forEach((f) => f()); }
-  subscribe(key: string, listener: () => void) {
-    const list = this.listeners.get(key) ?? new Set(); list.add(listener); this.listeners.set(key, list);
-    return () => { list.delete(listener); };
-  }
-}
-export function useDraft<T>(store: DraftStore, key: string, initial: () => T) {
-  const initialValue = useRef<T | null>(null);
-  if (initialValue.current === null) initialValue.current = initial();
-  const draft = useSyncExternalStore((cb) => store.subscribe(key, cb), () => store.get<T>(key) ?? initialValue.current!, () => initialValue.current!);
-  const [resumed] = useState(() => store.has(key));
-  const alive = useRef(true);
-  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
-  const setDraft = (next: T | ((current: T) => T)) => store.set(key, typeof next === "function" ? (next as (current: T) => T)(store.get<T>(key) ?? initialValue.current!) : next);
-  const discard = () => { initialValue.current = initial(); store.delete(key); };
-  return { draft, setDraft, discard, resumed, alive };
-}
-export function DraftHint({ resumed, onDiscard }: { resumed: boolean; onDiscard: () => void }) {
-  return resumed ? <div className="mw-draft"><span>已恢复未保存草稿，继续编辑</span><button type="button" onClick={onDiscard}>放弃草稿</button></div> : null;
-}
 export function SearchInput({ value, onChange, placeholder, label = placeholder, autoFocus }: { value: string; onChange: (value: string) => void; placeholder: string; label?: string; autoFocus?: boolean }) {
   return <div className="mw-search"><Search aria-hidden="true" size={17} /><input aria-label={label} autoFocus={autoFocus} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />{value && <button type="button" aria-label="清空搜索" onClick={() => onChange("")}><X size={15} /></button>}</div>;
 }

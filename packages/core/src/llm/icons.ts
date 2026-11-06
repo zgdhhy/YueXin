@@ -1,7 +1,7 @@
 import { ICON_ASSETS } from "./icon-assets";
 
 /** 厂商图标：使用本地清单，不猜测文件扩展名或外部网址。 */
-export const LLM_ICONS = [
+const LLM_ICONS = [
   ["claude", "Claude"],
   ["anthropic", "Anthropic"],
   ["openai", "OpenAI"],
@@ -36,30 +36,6 @@ const ICON_IDS = new Set<string>([...LLM_ICONS.map(([id]) => id), ...Object.keys
 export const isLlmIcon = (s: string | null | undefined): s is LlmIcon => !!s && ICON_IDS.has(s);
 export function iconAsset(id: LlmIcon) { return `/llm-icons/${ICON_ASSETS[id as keyof typeof ICON_ASSETS]?.file ?? `${id}.svg`}`; }
 export const PROVIDER_ICONS = Object.entries(ICON_ASSETS).map(([id,value])=>({id:id as LlmIcon,name:value.name})).sort((a,b)=>a.name.localeCompare(b.name));
-
-/** 按模型 id 猜厂商图标（兼容 OpenRouter 的 vendor/model 写法） */
-const MODEL_RULES: [RegExp, LlmIcon][] = [
-  [/claude/, "claude"],
-  [/(^|\/)(gpt|o\d|chatgpt|text-embedding)/, "openai"],
-  [/gemini|gemma/, "gemini"],
-  [/deepseek/, "deepseek"],
-  [/qwen|qwq/, "qwen"],
-  [/kimi|moonshot/, "kimi"],
-  [/glm/, "zhipu"],
-  [/minimax|abab/, "minimax"],
-  [/doubao/, "doubao"],
-  [/hunyuan/, "hunyuan"],
-  [/ernie/, "wenxin"],
-  [/step-/, "stepfun"],
-  [/grok/, "grok"],
-  [/mistral|mixtral|codestral/, "mistral"],
-  [/llama/, "meta"],
-];
-
-export function modelIcon(modelId: string): LlmIcon | null {
-  const id = modelId.toLowerCase();
-  return MODEL_RULES.find(([re]) => re.test(id))?.[1] ?? null;
-}
 
 /** 按地址或名称猜服务商图标，用于未选图标的自定义服务商 */
 const PROVIDER_RULES: [RegExp, LlmIcon][] = [

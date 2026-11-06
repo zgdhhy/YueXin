@@ -3,15 +3,15 @@
 import { ChevronRight, LogIn, Plus } from "lucide-react";
 import type { Stage } from "@paper/core";
 import type { WorkspaceData, WorkspaceModel, WorkspaceProvider } from "@/lib/model-workspace";
-import { LlmIconImg } from "@/components/llm-icon-img";
+import { LlmIconImg } from "@/components/admin/llm-icon-img";
 import { cn } from "@/lib/cn";
 import { verificationLabel } from "./policy-editor";
 import { Action } from "./workspace-ui";
 
 export type OpenPanel = (next: { kind: "provider" | "models" | "model" | "account"; providerId?: number; modelId?: number }) => void;
-export const STAGES: [Stage, string][] = [["rerank", "选题精选"], ["digest", "论文解读"], ["storyboard", "视频分镜"], ["report", "趋势月报"]];
-export const address = (p: WorkspaceProvider) => { try { return p.baseUrl ? new URL(p.baseUrl).host : p.protocol === "codex" ? "chatgpt.com" : p.protocol === "anthropic" ? "api.anthropic.com" : "官方接口"; } catch { return "接口地址待修正"; } };
-export const loggedOut = (p: WorkspaceProvider) => p.authType === "oauth" && !p.connected;
+export const STAGES: [Stage, string][] = [["rerank", "选题精选"], ["digest", "论文解读"], ["storyboard", "讲解脚本"], ["code", "动画代码"], ["report", "趋势月报"], ["chat", "对话"]];
+const address = (p: WorkspaceProvider) => { try { return p.baseUrl ? new URL(p.baseUrl).host : p.protocol === "codex" ? "chatgpt.com" : p.protocol === "anthropic" ? "api.anthropic.com" : "官方接口"; } catch { return "接口地址待修正"; } };
+const loggedOut = (p: WorkspaceProvider) => p.authType === "oauth" && !p.connected;
 export const usable = (p: WorkspaceProvider) => p.enabled && !loggedOut(p);
 
 /** 模型在工作流里的角色：默认/备用，以及单独指定了它的环节；沿用默认的环节不重复列出。 */

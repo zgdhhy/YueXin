@@ -1,8 +1,8 @@
 import { sql } from "drizzle-orm";
 import { integer, real, sqliteTable, text, uniqueIndex, primaryKey } from "drizzle-orm/sqlite-core";
 
-const createdAt = () =>
-  text("created_at")
+const createdAt = (name = "created_at") =>
+  text(name)
     .notNull()
     .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ','now'))`);
 
@@ -108,6 +108,8 @@ export const schedules = sqliteTable("schedules", {
 export const topics = sqliteTable("topics", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull(),
+  /** 一句话描述读者关心什么；交给大模型精选参考 */
+  description: text("description").notNull().default(""),
   arxivCategories: text("arxiv_categories", { mode: "json" }).$type<string[]>().notNull(),
   keywords: text("keywords", { mode: "json" }).$type<string[]>().notNull(),
   weight: real("weight").notNull().default(1),
@@ -131,7 +133,8 @@ export const papers = sqliteTable("papers", {
 
 export const runs = sqliteTable("runs", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  kind: text("kind", { enum: ["digest", "trend_report"] }).notNull(),
+  /** trial：用某个写作要求版本试写，结果只进 trials 表；sample：为视频风格渲染样片；reference：分析参考视频生成风格 */
+  kind: text("kind", { enum: ["digest", "trend_report", "trial", "sample", "reference"] }).notNull(),
   trigger: text("trigger", { enum: ["schedule", "manual"] }).notNull(),
   scheduleId: integer("schedule_id"),
   /** 手动指定论文时使用 */
@@ -143,7 +146,23 @@ export const runs = sqliteTable("runs", {
   finishedAt: text("finished_at"),
 });
 
-export type RunParams = { picks?: number; paperIds?: string[]; month?: string; videoDigestId?: number; modelSnapshot?: import("../model-policy").RunModelSnapshot };
+export type RunParams = {
+  picks?: number;
+  paperIds?: string[];
+  month?: string;
+  videoDigestId?: number;
+  /** 重做视频时沿用已有讲解脚本，只重写改过的镜头代码再渲染 */
+  reuseScript?: boolean;
+  /** 重做视频时临时指定的视频风格；样片运行的风格 */
+  styleId?: number;
+  /** 参考视频（相对 DATA_DIR），分析完即删除 */
+  referencePath?: string;
+  /** 试写：环节、写作要求版本与对象（论文解读为 arXiv id，讲解脚本为解读 id，趋势月报为月份） */
+  trial?: { stage: import("../requirements").RequirementStage; versionId: number; target: string };
+  modelSnapshot?: import("../model-policy").RunModelSnapshot;
+  /** 运行认领时锁定的各环节写作要求版本 */
+  requirements?: Partial<Record<import("../requirements").RequirementStage, number>>;
+};
 
 export const runSteps = sqliteTable("run_steps", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -190,7 +209,153 @@ export const digests = sqliteTable("digests", {
   contentMd: text("content_md").notNull(),
   notable: integer("notable", { mode: "boolean" }).notNull().default(false),
   pickReason: text("pick_reason"),
-  status: text("status", { enum: ["published", "hidden"] }).notNull().default("published"),
+  /** 当前生效的解读修订；正文等字段是它的副本 */
+  revisionId: integer("revision_id"),
+  createdAt: createdAt(),
+});
+
+/** 解读修订：每次（重新）解读产生一版，旧版保留以便对比和切换 */
+export const digestRevisions = sqliteTable("digest_revisions", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  digestId: integer("digest_id").notNull(),
+  runId: integer("run_id").notNull(),
+  titleZh: text("title_zh").notNull(),
+  oneLiner: text("one_liner").notNull(),
+  contentMd: text("content_md").notNull(),
+  tags: text("tags", { mode: "json" }).$type<string[]>().notNull().default([]),
+  /** 生成时使用的写作要求版本；升级前的旧解读为空 */
+  requirementsVersionId: integer("requirements_version_id"),
+  createdAt: createdAt(),
+});
+
+/** 写作要求版本：每个环节同时只有一个启用；内容保存后不再修改 */
+export const requirementVersions = sqliteTable("requirement_versions", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  stage: text("stage", { enum: ["rerank", "digest", "storyboard", "code", "report"] }).notNull(),
+  number: integer("number").notNull(),
+  content: text("content").notNull(),
+  note: text("note").notNull().default(""),
+  active: integer("active", { mode: "boolean" }).notNull().default(false),
+  createdAt: createdAt(),
+}, (t) => [uniqueIndex("requirement_versions_stage_number").on(t.stage, t.number)]);
+
+/** 试写结果：不对读者展示，只用于与当前启用版本的产出对比 */
+export const trials = sqliteTable("trials", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  runId: integer("run_id").notNull(),
+  stage: text("stage", { enum: ["rerank", "digest", "storyboard", "code", "report"] }).notNull(),
+  versionId: integer("version_id").notNull(),
+  target: text("target").notNull(),
+  output: text("output", { mode: "json" }).notNull(),
+  createdAt: createdAt(),
+});
+
+/**
+ * 视频风格：tokens 交给渲染框架（配色、字体、背景、转场、字幕），guide 交给写脚本与写代码的大模型
+ * （叙事口吻、画面要点、禁忌）。slug 非空的是内置风格。
+ */
+export const videoStyles = sqliteTable("video_styles", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  slug: text("slug").unique(),
+  name: text("name").notNull(),
+  /** 适合什么样的论文；自动选风格时交给大模型 */
+  description: text("description").notNull().default(""),
+  guide: text("guide").notNull().default(""),
+  tokens: text("tokens", { mode: "json" }).$type<import("@paper/video/theme").StyleTokens>().notNull(),
+  enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+  /** 样片（相对 DATA_DIR） */
+  samplePath: text("sample_path"),
+  createdAt: createdAt(),
+});
+
+/** 讲解脚本中的一个镜头：文案 + 画面说明 + 动画代码 */
+export type StoredShot = {
+  id: string;
+  heading: string;
+  visual: string;
+  cues: { zh: string; en: string }[];
+  /** 模型写的 TSX；为空表示还没写或需要重写 */
+  code: string | null;
+  /** 编译或渲染失败的原因；有值时渲染为简单画面 */
+  codeError: string | null;
+  /** 最近一次渲染的缩略图（相对 DATA_DIR） */
+  thumb: string | null;
+};
+
+/** 讲解脚本：一篇解读一份，可在后台编辑；重做视频时只重写改过的镜头 */
+export const explainerScripts = sqliteTable("explainer_scripts", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  digestId: integer("digest_id").notNull().unique(),
+  styleId: integer("style_id"),
+  /** 自动选择风格时，大模型给出的理由 */
+  styleReason: text("style_reason"),
+  title: text("title").notNull(),
+  shots: text("shots", { mode: "json" }).$type<StoredShot[]>().notNull(),
+  requirementsVersionId: integer("requirements_version_id"),
+  createdAt: createdAt(),
+  updatedAt: createdAt("updated_at"),
+});
+
+/** 助手对话：topic 为方向助手（不绑定对象），paper 为论文追问（subject 为 arXiv id），prompt 为提示词助手（subject 为环节） */
+export const conversations = sqliteTable("conversations", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  kind: text("kind", { enum: ["topic", "paper", "prompt"] }).notNull(),
+  subject: text("subject"),
+  /** 阅读对话的 AI 摘要名称或手动名称；为空时显示「新对话」 */
+  title: text("title"),
+  createdAt: createdAt(),
+});
+
+/** 对话消息；方向助手的回复可附带主题草稿，提示词助手的回复可附带写作要求草稿（data） */
+export const messages = sqliteTable("messages", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  conversationId: integer("conversation_id").notNull(),
+  role: text("role", { enum: ["user", "assistant"] }).notNull(),
+  content: text("content").notNull(),
+  data: text("data", { mode: "json" }).$type<TopicDraft | RequirementDraft | null>(),
+  createdAt: createdAt(),
+});
+
+export type TopicDraft = { name: string; description: string; arxivCategories: string[]; keywords: string[]; weight: number };
+/** 提示词助手给出的完整写作要求草稿；baseVersionId 是对话时正在看的版本 */
+export type RequirementDraft = { content: string; note: string; baseVersionId: number };
+
+/** 读者对一篇论文的标记；按论文记录，删除解读后仍保留，作为选题反馈 */
+export const paperMarks = sqliteTable("paper_marks", {
+  paperId: text("paper_id").primaryKey(),
+  favorite: integer("favorite", { mode: "boolean" }).notNull().default(false),
+  /** 不感兴趣：移出首页和默认列表，且不再推荐 */
+  notInterested: integer("not_interested", { mode: "boolean" }).notNull().default(false),
+  readState: text("read_state", { enum: ["unread", "reading", "read"] }).notNull().default("unread"),
+  /** 阅读进度 0–1 */
+  progress: real("progress").notNull().default(0),
+  updatedAt: createdAt("updated_at"),
+});
+
+/** 笔记：section 为空串表示整篇笔记，否则是挂在该段标题下的段落批注 */
+export const notes = sqliteTable(
+  "notes",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    paperId: text("paper_id").notNull(),
+    section: text("section").notNull().default(""),
+    content: text("content").notNull(),
+    createdAt: createdAt(),
+    updatedAt: createdAt("updated_at"),
+  },
+  (t) => [uniqueIndex("notes_paper_section").on(t.paperId, t.section)],
+);
+
+/** Highlights are independent from the whole-document notebook. Offsets refer to rendered text. */
+export const readingHighlights = sqliteTable("reading_highlights", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  subjectId: text("subject_id").notNull(),
+  quote: text("quote").notNull(),
+  prefix: text("prefix").notNull().default(""),
+  suffix: text("suffix").notNull().default(""),
+  start: integer("start").notNull(),
+  comment: text("comment").notNull().default(""),
+  color: text("color").notNull().default("#ffe066"),
   createdAt: createdAt(),
 });
 
@@ -212,6 +377,7 @@ export const storyboards = sqliteTable("storyboards", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   digestId: integer("digest_id").notNull().unique(),
   scenes: text("scenes", { mode: "json" }).notNull(),
+  requirementsVersionId: integer("requirements_version_id"),
   createdAt: createdAt(),
 });
 
@@ -220,6 +386,7 @@ export const videos = sqliteTable("videos", {
   digestId: integer("digest_id").notNull().unique(),
   path: text("path").notNull(),
   durationSec: real("duration_sec").notNull(),
+  styleId: integer("style_id"),
   createdAt: createdAt(),
 });
 
@@ -235,6 +402,7 @@ export const trendReports = sqliteTable("trend_reports", {
   month: text("month").notNull().unique(), // YYYY-MM
   title: text("title").notNull(),
   contentMd: text("content_md").notNull(),
+  requirementsVersionId: integer("requirements_version_id"),
   createdAt: createdAt(),
 });
 

@@ -1,10 +1,11 @@
 import Link from "next/link";
+import { SITE_NAME } from "@/lib/brand";
 import { Bell, ChevronRight, Mail, MessageCircle, MessagesSquare, Plus, Send, type LucideIcon } from "lucide-react";
 import { db, schema, CHANNEL_LABELS, EVENT_LABELS, NOTIFY_EVENTS } from "@paper/core";
 import { deleteChannel, saveChannel, testChannel } from "../actions";
-import { SubmitButton } from "@/components/admin-client";
-import { Modal } from "@/components/modal";
-import { Card, EmptyState, Field, Input, PageHeader, StatusBadge, Switch, buttonCls } from "@/components/ui";
+import { SubmitButton } from "@/components/admin/admin-client";
+import { Modal } from "@/components/admin/modal";
+import { Card, EmptyState, Field, Input, PageHeader, StatusBadge, Switch, buttonCls } from "@/components/admin/ui";
 
 type Channel = typeof schema.notifyChannels.$inferSelect;
 type ChannelType = Channel["type"];
@@ -90,7 +91,7 @@ function ChannelForm({ type, c }: { type: ChannelType; c?: Channel }) {
                   <Input name="pass" type="password" placeholder={kept(c, "pass")} autoComplete="new-password" />
                 </Field>
                 <Field label="发件人" className="sm:col-span-2">
-                  <Input name="from" defaultValue={c?.config.from} placeholder="论文精读 <bot@example.com>" />
+                  <Input name="from" defaultValue={c?.config.from} placeholder={`${SITE_NAME} <bot@example.com>`} />
                 </Field>
               </div>
             </details>

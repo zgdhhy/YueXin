@@ -4,8 +4,11 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./storyboard": "./src/storyboard.ts",
+    "./script": "./src/script.ts",
+    "./theme": "./src/theme.ts",
     "./render": "./render/index.ts",
+    "./compile": "./render/compile.ts",
+    "./reference": "./render/reference.ts",
     "./music": "./render/music.ts"
   },
   "scripts": {

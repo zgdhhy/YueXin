@@ -2,11 +2,11 @@ import { z } from "zod";
 
 export const PROTOCOLS = ["anthropic", "openai", "responses", "gemini", "codex"] as const;
 export type Protocol = typeof PROTOCOLS[number];
-export const httpUrl = z.string().trim().max(2048).refine(value => {
+const httpUrl = z.string().trim().max(2048).refine(value => {
   if (!value) return true;
   try { const u = new URL(value); return ["http:", "https:"].includes(u.protocol) && !u.username && !u.password; } catch { return false; }
 }, "请填写不含用户名和密码的完整 HTTP 地址");
-export const requestHeadersSchema = z.record(z.string().regex(/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/), z.string().max(8192).refine(v => !/[\r\n]/.test(v), "请求头不能包含换行")).superRefine((headers, ctx) => {
+const requestHeadersSchema = z.record(z.string().regex(/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/), z.string().max(8192).refine(v => !/[\r\n]/.test(v), "请求头不能包含换行")).superRefine((headers, ctx) => {
   const names = Object.keys(headers).map(k => k.toLowerCase());
   if (names.length > 30 || new Set(names).size !== names.length) ctx.addIssue({ code: "custom", message: "请求头最多 30 项，名称不能重复" });
   if (names.some(k => ["host", "content-length", "connection", "transfer-encoding"].includes(k))) ctx.addIssue({ code: "custom", message: "不能覆盖 Host、连接或传输长度请求头" });

@@ -5,6 +5,7 @@ import {
   normalizeProviderBaseUrl, getModelPolicy, saveModelPolicy, stagePolicySchema, targetIssue, resolvedStage, assertNotRunning, beginVerification, finishVerification,
   listRemoteModels, testModel, startDeviceLogin, startBrowserLogin, pollDeviceLogin,
   completeBrowserLogin, parseCodexAuthJson, type OAuthState,
+  MODEL_STAGES,
 } from "@paper/core";
 import { getSession } from "@/lib/auth";
 import { modelWorkspace } from "@/lib/model-workspace";
@@ -27,7 +28,7 @@ const command = z.discriminatedUnion("action", [
   z.object({ action: z.literal("delete-model"), id }),
   z.object({ action: z.literal("test"), id }),
   z.object({ action: z.literal("defaults"), defaultModelId: id, fallbackModelId: id.nullable(), revision: z.number().int() }),
-  z.object({ action: z.literal("stage"), stage: z.enum(["rerank", "digest", "storyboard", "report"]), policy: stagePolicySchema, revision: z.number().int() }),
+  z.object({ action: z.literal("stage"), stage: z.enum(MODEL_STAGES), policy: stagePolicySchema, revision: z.number().int() }),
   z.object({ action: z.literal("oauth-start"), id, method: z.enum(["device", "browser"]) }),
   z.object({ action: z.literal("oauth-poll"), id }),
   z.object({ action: z.literal("oauth-complete"), id, input: z.string().trim().min(1).max(100000) }),

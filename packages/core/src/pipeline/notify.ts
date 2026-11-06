@@ -146,12 +146,12 @@ export async function broadcast(event: NotifyEvent, n: Notice, log: Log) {
   if (failed === channels.length) throw new Error("所有通知渠道都发送失败");
 }
 
-export function failureNotice(r: { id: number; kind: "digest" | "trend_report"; error: string }): Notice {
+export function failureNotice(r: { id: number; label: string; error: string }): Notice {
   return {
     title: `运行失败 · #${r.id}`,
     items: [
       {
-        title: `${r.kind === "trend_report" ? "趋势月报" : "论文解读"}运行 #${r.id} 未完成`,
+        title: `${r.label}运行 #${r.id} 未完成`,
         summary: r.error.slice(0, 300),
         url: `${env.siteUrl}/admin/runs/${r.id}`,
       },
