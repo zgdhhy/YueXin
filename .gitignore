@@ -1,10 +1,26 @@
-node_modules
-.next
+# 依赖与构建产物（.next-* 是浏览器回归用的独立构建目录）
+node_modules/
+.next/
 .next-*/
-data/*
-!data/.gitkeep
-.env
-*.log
 *.tsbuildinfo
 next-env.d.ts
+__pycache__/
+
+# 运行数据：数据库、论文原图、视频、音乐、测试 fixture
+data/*
+!data/.gitkeep
+
+# 本地配置与密钥，只提交模板
+.env
+.env.*
+!.env.example
+
+# 日志与本地备份
+*.log
 .backups/
+
+# 本机工具与系统文件
+.claude/settings.local.json
+.claude/worktrees/
+.DS_Store
+Thumbs.db

@@ -24,6 +24,6 @@
 
 ## 验证
 
-模型回归：`npx tsx scripts/check-model-ui.ts`，使用独立数据库和本机模拟推理；运行步骤见 README「浏览器回归」。截图禁用动画，避免将抽屉过渡态误作最终样式。
+模型回归：`npx tsx scripts/check-model-ui.ts`，使用独立数据库和本机模拟推理；运行步骤见 [development.md](development.md)「浏览器回归」。截图禁用动画，避免将抽屉过渡态误作最终样式。
 
 方案 A 布局检查：`node --experimental-strip-types scripts/check-layout.ts`。检查运行于本地3000服务，使用只读交互（不启动任务、不保存配置、不调用模型），覆盖320 / 390 / 768 / 1024 / 1440px和移动导航、目录、筛选、配置抽屉。截图与结果保存在 `data/scheme-a-review/`。

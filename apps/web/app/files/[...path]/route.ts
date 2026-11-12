@@ -23,7 +23,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ path: st
 
   const rel = (await params).path.map(decodeURIComponent).join("/");
   const file = path.resolve(env.dataDir, rel);
-  const allowed = [path.resolve(env.dataDir, "papers"), path.resolve(env.dataDir, "videos"), path.resolve(env.dataDir, "music")];
+  const allowed = ["papers", "videos", "music", "styles"].map((dir) => path.resolve(env.dataDir, dir));
   if (!allowed.some((dir) => file.startsWith(dir + path.sep)) || !fs.existsSync(file)) {
     return new Response("Not found", { status: 404 });
   }

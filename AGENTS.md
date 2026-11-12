@@ -34,7 +34,7 @@ npm run check:reader   # 阅读工作台浏览器回归（独立数据库，不�
 npm run db:generate    # 改 packages/core/src/db/schema.ts 后生成迁移
 ```
 
-其余浏览器回归和截图工具见 README「浏览器回归」。
+其余浏览器回归和截图工具见 [docs/development.md](docs/development.md)。
 
 ## 约定
 
