@@ -22,8 +22,8 @@
 - 能访问 huggingface.co 和 arxiv.org 的网络（国内见下方「网络」）
 
 ```bash
-git clone https://github.com/zgdhhy/YueJian.git
-cd YueJian
+git clone https://github.com/zgdhhy/YueXin.git
+cd YueXin
 npm install
 cp .env.example .env
 ```
@@ -70,7 +70,7 @@ npm run run-once -- --report 2026-10   # 生成指定月份的趋势月报
 建议 2 核 4GB 内存以上（视频渲染比较耗资源），已安装 Docker。
 
 ```bash
-git clone https://github.com/zgdhhy/YueJian.git && cd YueJian
+git clone https://github.com/zgdhhy/YueXin.git && cd YueXin
 cp .env.example .env    # 改 ADMIN_PASSWORD、SESSION_SECRET，SITE_URL 填 https://你的域名
 docker compose build
 docker compose up -d
@@ -138,7 +138,7 @@ data/           运行数据（不进仓库）
 
 ## 问题反馈
 
-欢迎在 [Issues](https://github.com/zgdhhy/YueJian/issues) 报告问题。也接受 PR，较大的改动请先开 issue 讨论。
+欢迎在 [Issues](https://github.com/zgdhhy/YueXin/issues) 报告问题。也接受 PR，较大的改动请先开 issue 讨论。
 
 ## 许可证
 
